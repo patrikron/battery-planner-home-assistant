@@ -1,0 +1,83 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Batteriplanerare",
+        "description": "Skuggläge: planerar och simulerar ett batteri mot dina verkliga priser och din förbrukning, utan att styra något.",
+        "data": {
+          "price_entity": "Prissensor (köppris, Nordpool med raw_today/raw_tomorrow)",
+          "sell_entity": "Prissensor för försäljning (valfri)",
+          "grid_import_entity": "Energi köpt från nätet (kWh, ackumulerande)",
+          "grid_export_entity": "Energi såld till nätet (kWh, ackumulerande)",
+          "capacity_kwh": "Batterikapacitet",
+          "min_soc_pct": "Lägsta laddnivå / reserv",
+          "max_charge_kw": "Max laddeffekt",
+          "max_discharge_kw": "Max urladdningseffekt",
+          "roundtrip_efficiency_pct": "Verkningsgrad tur och retur",
+          "main_fuse_a": "Huvudsäkring",
+          "wear_cost": "Slitagekostnad per kWh ur batteriet",
+          "allow_export": "Tillåt försäljning från batteriet",
+          "heating_energy_entities": "Energisensorer för uppvärmning (värmepump, element)",
+          "outdoor_temp_entity": "Utetemperatur",
+          "weather_entity": "Väderprognos (för utetemperatur framåt)",
+          "fire_temp_entity": "Temperatursensor vid kaminen",
+          "fire_threshold": "Temperatur då det räknas som att det eldas",
+          "vvb_plan_entity": "Varmvattenplanerarens statussensor (läser dess plan)",
+          "vvb_energy_entity": "Varmvattenberedarens energisensor",
+          "car_soc_entity": "Elbilens laddnivå (%)",
+          "car_target_entity": "Elbilens målnivå (%)",
+          "car_plug_entity": "Elbil inkopplad",
+          "car_energy_entity": "Laddboxens energisensor",
+          "car_capacity_kwh": "Elbilens batterikapacitet",
+          "car_power_kw": "Laddeffekt elbil",
+          "car_ready_by": "Elbilen klar senast",
+          "pv_energy_entity": "Solproduktion (kWh, ackumulerad)",
+          "use_solar_forecast": "Använd solprognosen från Energipanelen",
+          "max_soc_pct": "Högsta laddnivå",
+          "battery_price": "Batteriets pris efter avdrag (valfritt)",
+          "lifetime_mwh": "Garanterad genomströmning totalt (valfritt)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Batteriplanerare",
+        "data": {
+          "price_entity": "Prissensor (köppris, Nordpool med raw_today/raw_tomorrow)",
+          "sell_entity": "Prissensor för försäljning (valfri)",
+          "grid_import_entity": "Energi köpt från nätet (kWh, ackumulerande)",
+          "grid_export_entity": "Energi såld till nätet (kWh, ackumulerande)",
+          "capacity_kwh": "Batterikapacitet",
+          "min_soc_pct": "Lägsta laddnivå / reserv",
+          "max_charge_kw": "Max laddeffekt",
+          "max_discharge_kw": "Max urladdningseffekt",
+          "roundtrip_efficiency_pct": "Verkningsgrad tur och retur",
+          "main_fuse_a": "Huvudsäkring",
+          "wear_cost": "Slitagekostnad per kWh ur batteriet",
+          "allow_export": "Tillåt försäljning från batteriet",
+          "heating_energy_entities": "Energisensorer för uppvärmning (värmepump, element)",
+          "outdoor_temp_entity": "Utetemperatur",
+          "weather_entity": "Väderprognos (för utetemperatur framåt)",
+          "fire_temp_entity": "Temperatursensor vid kaminen",
+          "fire_threshold": "Temperatur då det räknas som att det eldas",
+          "vvb_plan_entity": "Varmvattenplanerarens statussensor (läser dess plan)",
+          "vvb_energy_entity": "Varmvattenberedarens energisensor",
+          "car_soc_entity": "Elbilens laddnivå (%)",
+          "car_target_entity": "Elbilens målnivå (%)",
+          "car_plug_entity": "Elbil inkopplad",
+          "car_energy_entity": "Laddboxens energisensor",
+          "car_capacity_kwh": "Elbilens batterikapacitet",
+          "car_power_kw": "Laddeffekt elbil",
+          "car_ready_by": "Elbilen klar senast",
+          "pv_energy_entity": "Solproduktion (kWh, ackumulerad)",
+          "use_solar_forecast": "Använd solprognosen från Energipanelen",
+          "max_soc_pct": "Högsta laddnivå",
+          "battery_price": "Batteriets pris efter avdrag (valfritt)",
+          "lifetime_mwh": "Garanterad genomströmning totalt (valfritt)"
+        }
+      }
+    }
+  }
+}

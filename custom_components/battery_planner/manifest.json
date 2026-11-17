@@ -1,0 +1,21 @@
+{
+  "domain": "battery_planner",
+  "name": "Batteriplanerare",
+  "codeowners": [
+    "@patrikron"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "recorder"
+  ],
+  "documentation": "https://github.com/patrikron/battery-planner-home-assistant",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/patrikron/battery-planner-home-assistant/issues",
+  "requirements": [],
+  "version": "0.6.1",
+  "after_dependencies": [
+    "http",
+    "frontend",
+    "energy"
+  ]
+}

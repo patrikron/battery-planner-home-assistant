@@ -1,0 +1,83 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Battery planner",
+        "description": "Shadow mode: plans and simulates a battery against your real prices and consumption without controlling anything.",
+        "data": {
+          "price_entity": "Price sensor (buy price, Nordpool with raw_today/raw_tomorrow)",
+          "sell_entity": "Sell price sensor (optional)",
+          "grid_import_entity": "Energy imported from grid (kWh, cumulative)",
+          "grid_export_entity": "Energy exported to grid (kWh, cumulative)",
+          "capacity_kwh": "Battery capacity",
+          "min_soc_pct": "Minimum state of charge / reserve",
+          "max_charge_kw": "Max charge power",
+          "max_discharge_kw": "Max discharge power",
+          "roundtrip_efficiency_pct": "Round-trip efficiency",
+          "main_fuse_a": "Main fuse",
+          "wear_cost": "Wear cost per kWh discharged",
+          "allow_export": "Allow selling from the battery",
+          "heating_energy_entities": "Heating energy sensors (heat pump, radiators)",
+          "outdoor_temp_entity": "Outdoor temperature",
+          "weather_entity": "Weather forecast (outdoor temperature ahead)",
+          "fire_temp_entity": "Fireplace temperature sensor",
+          "fire_threshold": "Temperature that counts as the fire burning",
+          "vvb_plan_entity": "Water heater planner status sensor (reads its plan)",
+          "vvb_energy_entity": "Water heater energy sensor",
+          "car_soc_entity": "EV state of charge (%)",
+          "car_target_entity": "EV target level (%)",
+          "car_plug_entity": "EV plugged in",
+          "car_energy_entity": "Charger energy sensor",
+          "car_capacity_kwh": "EV battery capacity",
+          "car_power_kw": "EV charging power",
+          "car_ready_by": "EV ready by",
+          "pv_energy_entity": "PV production (kWh, cumulative)",
+          "use_solar_forecast": "Use the solar forecast from the Energy dashboard",
+          "max_soc_pct": "Maximum state of charge",
+          "battery_price": "Battery price after deduction (optional)",
+          "lifetime_mwh": "Warranted throughput in total (optional)"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Battery planner",
+        "data": {
+          "price_entity": "Price sensor (buy price, Nordpool with raw_today/raw_tomorrow)",
+          "sell_entity": "Sell price sensor (optional)",
+          "grid_import_entity": "Energy imported from grid (kWh, cumulative)",
+          "grid_export_entity": "Energy exported to grid (kWh, cumulative)",
+          "capacity_kwh": "Battery capacity",
+          "min_soc_pct": "Minimum state of charge / reserve",
+          "max_charge_kw": "Max charge power",
+          "max_discharge_kw": "Max discharge power",
+          "roundtrip_efficiency_pct": "Round-trip efficiency",
+          "main_fuse_a": "Main fuse",
+          "wear_cost": "Wear cost per kWh discharged",
+          "allow_export": "Allow selling from the battery",
+          "heating_energy_entities": "Heating energy sensors (heat pump, radiators)",
+          "outdoor_temp_entity": "Outdoor temperature",
+          "weather_entity": "Weather forecast (outdoor temperature ahead)",
+          "fire_temp_entity": "Fireplace temperature sensor",
+          "fire_threshold": "Temperature that counts as the fire burning",
+          "vvb_plan_entity": "Water heater planner status sensor (reads its plan)",
+          "vvb_energy_entity": "Water heater energy sensor",
+          "car_soc_entity": "EV state of charge (%)",
+          "car_target_entity": "EV target level (%)",
+          "car_plug_entity": "EV plugged in",
+          "car_energy_entity": "Charger energy sensor",
+          "car_capacity_kwh": "EV battery capacity",
+          "car_power_kw": "EV charging power",
+          "car_ready_by": "EV ready by",
+          "pv_energy_entity": "PV production (kWh, cumulative)",
+          "use_solar_forecast": "Use the solar forecast from the Energy dashboard",
+          "max_soc_pct": "Maximum state of charge",
+          "battery_price": "Battery price after deduction (optional)",
+          "lifetime_mwh": "Warranted throughput in total (optional)"
+        }
+      }
+    }
+  }
+}
