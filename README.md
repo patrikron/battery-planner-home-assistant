@@ -40,6 +40,19 @@ Alla värden kan ändras efteråt under Konfigurera.
 | `sensor.batteriplanerare_elbil_planerad_laddning` | kWh som planeras in i bilen före klar-tiden, attribut med perioder och behov |
 | `binary_sensor.batteriplanerare_elbil_ska_ladda_nu` | `on` när planen säger att bilen ska ladda den här timmen |
 | `binary_sensor.batteriplanerare_batteri_laddar_fran_natet_nu` | `on` när planen laddar batteriet från nätet den här timmen |
+| `sensor.batteriplanerare_batterioverskott` | kWh som batteriet har över reserven innan det laddas nästa gång, med buffert för prognosfel |
+| `binary_sensor.batteriplanerare_element_far_kora_pa_batteriet` | `on` när överskottet räcker till den inställda effekten i minst en timme |
+
+## Element på batteriöverskott (valfritt)
+
+Prisstyrda element brukar stängas av när elen är dyr. Med batteri finns det ofta energi kvar när kvällens dyra timmar är slut, och då kan elementen lika gärna få köra på den.
+
+- `sensor.batteriplanerare_batterioverskott` tittar på planen fram till nästa gång batteriet laddas (från nätet eller solen). Fram till dess sjunker laddnivån hela tiden, så det som finns kvar över reserven då är överskott. Planerad urladdning räknas med en buffert (standard 20 %) för att förbrukningen kan bli högre än prognosen.
+- Ange elementens effekt i kW under Konfigurera ("Effekt som får köras på batteriöverskott"). Då slås `binary_sensor.batteriplanerare_element_far_kora_pa_batteriet` på när överskottet räcker en hel timme med den effekten, och av när det räcker mindre än en halvtimme. 0 kW stänger av funktionen.
+- Överskottet räknas om var 15:e minut. Drar elementen ström sjunker laddnivån, och binärsensorn slås av innan batteriet behövs till de dyra timmarna.
+- Medan batteriet laddar är överskottet 0.
+
+Behåll din vanliga prisstyrning och lägg till villkoret: element på om priset är lågt **eller** binärsensorn är på.
 
 ## Uppvärmning och kamin (valfritt)
 
