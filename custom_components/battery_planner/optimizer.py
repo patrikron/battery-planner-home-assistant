@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+INF_CAP = float("inf")
+
 
 @dataclass
 class BatteryParams:
@@ -29,6 +31,7 @@ class BatteryParams:
     allow_export: bool = False     # may the battery sell to the grid
     sell_margin: float = 0.0       # extra kr/kWh a sale must beat (planning only, not part of reported cost)
     export_limit_kwh: float | None = None  # max kWh exported per hour (main fuse); None = no limit
+    sell_buffer: float = 0.0       # sell only what is left if the load were this much higher (0.2 = +20 %)
     step_kwh: float = 0.25         # state of charge resolution
     high_soc: float = 0.8          # fraction above which standing charge is discouraged
     hold_cost: float = 0.0         # kr per kWh and hour kept above high_soc (not part of reported cost)
@@ -74,7 +77,8 @@ class PlanResult:
         return self.total_cost_without - self.total_cost
 
 
-def _transition(a: float, b: float, h: int, price, sell, load, surplus, grid_room, bp: BatteryParams):
+def _transition(a: float, b: float, h: int, price, sell, load, surplus, grid_room, bp: BatteryParams,
+                export_cap=None):
     """Cost of moving from soc a to soc b during hour h. Returns (cost, detail) or None if infeasible."""
     p, s, L, S = price[h], sell[h], load[h], surplus[h]
     base = L * p - S * s
@@ -97,6 +101,8 @@ def _transition(a: float, b: float, h: int, price, sell, load, surplus, grid_roo
         to_grid = delivered - to_load
         if to_grid > 1e-6 and not bp.allow_export:
             return None
+        if export_cap is not None and to_grid > export_cap[h] + 1e-9:
+            return None
         if bp.export_limit_kwh is not None and to_grid > 1e-6 and to_grid + S > bp.export_limit_kwh + 1e-9:
             return None
         cost = base - to_load * p - to_grid * s + delivered * bp.wear_cost
@@ -105,12 +111,16 @@ def _transition(a: float, b: float, h: int, price, sell, load, surplus, grid_roo
 
 
 def optimize(price, sell, load, surplus, grid_room, soc0: float, bp: BatteryParams,
-             terminal_value: float | None = None) -> PlanResult:
+             terminal_value: float | None = None, export_cap=None) -> PlanResult:
     """Return the cost-minimising plan for the horizon.
 
     terminal_value: kr per kWh left in the battery at the end of the horizon.
     Defaults to a conservative estimate (lower quartile of buy prices) so the
     planner does not empty the battery just because the horizon ends.
+
+    With bp.sell_buffer > 0 the plan is first made for a load that much higher;
+    what that plan sells each hour caps what the real plan may sell, so a sale
+    never relies on the load forecast being right.
     """
     n = len(price)
     if n == 0:
@@ -124,6 +134,12 @@ def optimize(price, sell, load, surplus, grid_room, soc0: float, bp: BatteryPara
     if terminal_value is None:
         sp = sorted(price)
         terminal_value = sp[len(sp) // 4] * bp.eff_discharge * 0.9
+    if export_cap is None and bp.allow_export and bp.sell_buffer > 0:
+        hi_load = [l * (1 + bp.sell_buffer) for l in load]
+        hi_room = [max(0.0, r - (hl - l)) for r, l, hl in zip(grid_room, load, hi_load)]
+        cautious = optimize(price, sell, hi_load, surplus, hi_room, soc0, bp, terminal_value, export_cap=[INF_CAP] * n)
+        # One state of charge step of slack: rounding to steps can force a little export.
+        export_cap = [hp.to_grid + step for hp in cautious.hours]
 
     # Precompute the allowed range of next states for speed.
     max_up = bp.max_charge_kw * bp.eff_charge
@@ -142,7 +158,7 @@ def optimize(price, sell, load, surplus, grid_room, soc0: float, bp: BatteryPara
             for j, b in enumerate(levels):
                 if b - a > max_up + 1e-9 or a - b > max_down + 1e-9:
                     continue
-                t = _transition(a, b, h, price, sell, load, surplus, grid_room, bp)
+                t = _transition(a, b, h, price, sell, load, surplus, grid_room, bp, export_cap)
                 if t is None:
                     continue
                 c = t[0] + value[j]
@@ -162,7 +178,7 @@ def optimize(price, sell, load, surplus, grid_room, soc0: float, bp: BatteryPara
     for h in range(n):
         j = choice[h][i]
         a, b = levels[i], levels[j]
-        t = _transition(a, b, h, price, sell, load, surplus, grid_room, bp)
+        t = _transition(a, b, h, price, sell, load, surplus, grid_room, bp, export_cap)
         cost, (grid, solar, to_load, to_grid) = t if t else (0.0, (0, 0, 0, 0))
         base = load[h] * price[h] - surplus[h] * sell[h]
         hp = HourPlan(h, a, b, grid, solar, to_load, to_grid, cost, base)
