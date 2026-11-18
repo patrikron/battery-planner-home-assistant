@@ -3,10 +3,11 @@
  * type: custom:battery-planner-card            plan, laddnivå, planerad laddning, besparing
  *   show_charging: true   (lista med planerade laddtillfällen)
  *   charging_rows: 6
+ *   Flikar "Närmaste dygnet" och "Imorgon" visar graf och schema för respektive period.
  * type: custom:battery-planner-insights-card   scenarier, besparing per dag, prognos mot utfall
  * entity: sensor.batteriplanerare_plan   (valfri, standard)
  */
-const CARD_VERSION = "0.6.3";
+const CARD_VERSION = "0.6.4";
 
 const C = {
   bg: "var(--ha-card-background, var(--card-background-color, #14161b))",
@@ -17,6 +18,8 @@ const C = {
   cyan: "#22c3e6",
   price: "rgba(160,160,170,0.35)",
   pricePast: "rgba(160,160,170,0.15)",
+  now: "#ff5f6d",
+  sell: "#7bd88f",
 };
 
 const ACTION_TXT = { charge: "Laddar", discharge: "Levererar", idle: "Väntar" };
@@ -82,6 +85,48 @@ function chargeSessions(plan) {
   return out;
 }
 
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/** Rows of the plan that belong to tomorrow (local time). */
+function tomorrowRows(plan, now) {
+  const t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return plan.filter((r) => sameDay(new Date(r.start), t));
+}
+
+/** What the battery does in one hour, finer than r.action: grid/sun charge, sell, to house or idle. */
+function hourKind(r) {
+  if ((r.grid_charge || 0) > 0.05) return "grid";
+  if ((r.solar_charge || 0) > 0.05) return "sun";
+  if ((r.to_grid || 0) > 0.05) return "sell";
+  if ((r.to_load || 0) > 0.05) return "house";
+  return "idle";
+}
+
+const KIND_TXT = { grid: "Laddar från nätet", sun: "Laddar med sol", sell: "Säljer till nätet", house: "Driver huset", idle: "Väntar" };
+const KIND_CLS = { grid: "ch", sun: "sun", sell: "sell", house: "dis", idle: "idle" };
+
+/** Consecutive hours with the same kind: [{kind, from, to, kwh, cost, income, soc}] */
+function kindSpans(plan) {
+  const out = [];
+  for (const r of plan) {
+    const k = hourKind(r);
+    const t = new Date(r.start);
+    let last = out[out.length - 1];
+    if (!(last && last.kind === k && t - last.to === 0)) {
+      last = { kind: k, from: t, to: t, kwh: 0, cost: 0, income: 0, soc: 0 };
+      out.push(last);
+    }
+    last.to = new Date(t.getTime() + 3600e3);
+    const g = r.grid_charge || 0, s = r.solar_charge || 0, h = r.to_load || 0, x = r.to_grid || 0;
+    last.kwh += k === "grid" || k === "sun" ? g + s : h + x;
+    last.cost += g * (r.price || 0);
+    last.soc = r.soc_end;
+  }
+  return out;
+}
+
 function nextEventText(plan) {
   const sp = spans(plan).filter((s) => s.action !== "idle");
   if (!sp.length) return "Inget planerat de närmaste timmarna";
@@ -109,7 +154,16 @@ class BatteryPlannerCard extends HTMLElement {
       charging_rows: 6,
       ...config,
     };
-    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: "open" });
+      this.shadowRoot.addEventListener("click", (e) => {
+        const b = e.target.closest && e.target.closest("[data-view]");
+        if (!b) return;
+        this._view = b.dataset.view;
+        this._render();
+      });
+    }
+    if (!this._view) this._view = "next";
   }
 
   set hass(hass) {
@@ -140,8 +194,13 @@ class BatteryPlannerCard extends HTMLElement {
       this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px">Hittar inte ${c.entity}</div></ha-card>`;
       return;
     }
-    const plan = (st.attributes.plan || []).slice(0, c.hours);
+    const full = st.attributes.plan || [];
+    const now = new Date();
+    const plan = full.slice(0, c.hours);
     const cur = plan[0] ? plan[0].action : "idle";
+    const tom = tomorrowRows(full, now);
+    const view = this._view === "tomorrow" ? "tomorrow" : "next";
+    const shown = view === "tomorrow" ? tom : plan;
     const soc = this._num(c.soc_entity);
     const socKwh = this._num(c.soc_kwh_entity);
     const today = this._num(c.today_entity);
@@ -167,14 +226,23 @@ class BatteryPlannerCard extends HTMLElement {
           <div class="kv"><div class="k">Sparat idag</div><div class="v accent">${fmtKr(today)}</div></div>
           <div class="kv"><div class="k">Denna månad</div><div class="v">${fmtKr(month)}</div></div>
         </div>
-        ${this._chart(plan)}
+        <div class="tabs" role="tablist">
+          <button role="tab" data-view="next" class="${view === "next" ? "on" : ""}" aria-selected="${view === "next"}">Närmaste dygnet</button>
+          <button role="tab" data-view="tomorrow" class="${view === "tomorrow" ? "on" : ""}" aria-selected="${view === "tomorrow"}">Imorgon${tom.length ? "" : " (inga priser än)"}</button>
+        </div>
+        ${view === "tomorrow" && !tom.length
+          ? `<div class="empty">Morgondagens elpriser har inte kommit än. De brukar publiceras runt kl. 13, sedan planeras morgondagen.</div>`
+          : this._chart(shown, view === "next" ? now : null)}
         <div class="legend">
           <span><i class="sw price"></i>Elpris</span>
           <span><i class="sw ch"></i>Laddning</span>
           <span><i class="sw dis"></i>Urladdning</span>
           <span><i class="sw soc"></i>Laddnivå</span>
+          ${view === "next" ? `<span><i class="sw now"></i>Nu</span>` : ""}
         </div>
-        <div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>${nextEventText(plan)}</div>
+        ${view === "tomorrow"
+          ? this._daySchedule(tom)
+          : `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>${nextEventText(plan)}</div>`}
         ${c.show_charging ? this._charging(st.attributes.plan || []) : ""}
         ${(car.perioder && car.perioder.length) || (vvb.perioder && vvb.perioder.length) || car.inkopplad === false ? `<div class="loads">
           ${vvb.perioder ? `<div><ha-icon icon="mdi:water-boiler"></ha-icon><span>Varmvatten</span><b>${vvb.perioder.length ? `${spanTxt(vvb.perioder)} · ${vvb.planerat_kwh} kWh` : "inget planerat"}</b></div>` : ""}
@@ -216,6 +284,32 @@ class BatteryPlannerCard extends HTMLElement {
     </div>`;
   }
 
+  _daySchedule(rows) {
+    if (!rows.length) return "";
+    const kwh = (v) => v.toLocaleString("sv-SE", { maximumFractionDigits: 1 });
+    const sp = kindSpans(rows).filter((s) => s.kind !== "idle");
+    const d = new Date(rows[0].start);
+    const head = `${d.toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}`;
+    if (!sp.length) return `<div class="charging"><div class="sub">Schema ${head}</div><div class="none">Batteriet står still hela dagen</div></div>`;
+    const list = sp.map((s) => `<div class="crow day">
+        <span class="when">${hh(s.from)}–${hh(s.to)}</span>
+        <span class="amt"><i class="dot ${KIND_CLS[s.kind]}"></i>${KIND_TXT[s.kind]}</span>
+        <span class="price">${kwh(s.kwh)} kWh${s.kind === "grid" ? ` · ca ${fmtKr(s.cost)}` : ""}</span>
+        <span class="after" title="Energi i batteriet efteråt">→ ${kwh(s.soc)} kWh</span>
+      </div>`).join("");
+    const sum = (k) => sp.filter((s) => s.kind === k).reduce((a, s) => a + s.kwh, 0);
+    const parts = [];
+    if (sum("grid") > 0.05) parts.push(`${kwh(sum("grid"))} kWh från nätet`);
+    if (sum("sun") > 0.05) parts.push(`${kwh(sum("sun"))} kWh sol`);
+    if (sum("house") > 0.05) parts.push(`${kwh(sum("house"))} kWh till huset`);
+    if (sum("sell") > 0.05) parts.push(`${kwh(sum("sell"))} kWh sålt`);
+    return `<div class="charging">
+      <div class="sub">Schema ${head}</div>
+      ${list}
+      <div class="ctot">${parts.join(" · ")}</div>
+    </div>`;
+  }
+
   _ring(soc) {
     const r = 26, circ = 2 * Math.PI * r;
     const p = soc === null ? 0 : Math.max(0, Math.min(100, soc));
@@ -227,7 +321,7 @@ class BatteryPlannerCard extends HTMLElement {
     </svg>`;
   }
 
-  _chart(plan) {
+  _chart(plan, now) {
     if (!plan.length) return `<div class="empty">Ingen plan ännu</div>`;
     const W = 600, H = 226, L = 40, R = 40, T = 28, B = 26;
     const n = plan.length, bw = (W - L - R) / n;
@@ -247,15 +341,30 @@ class BatteryPlannerCard extends HTMLElement {
       if (ch > 0.05) energy += `<rect x="${x + bw * 0.2}" y="${midY + 2}" width="${bw * 0.6}" height="${eh(ch)}" rx="2" fill="${C.cyan}"><title>${hh(t)}:00 · laddar ${ch.toFixed(1)} kWh</title></rect>`;
       if (dis > 0.05) energy += `<rect x="${x + bw * 0.2}" y="${midY + 2}" width="${bw * 0.6}" height="${eh(dis)}" rx="2" fill="${C.amber}"><title>${hh(t)}:00 · levererar ${dis.toFixed(1)} kWh</title></rect>`;
       if (i % 3 === 0) labels += `<text x="${x + bw / 2}" y="${H - 8}" text-anchor="middle" class="ax">${hh(t)}</text>`;
+      if (i > 0 && t.getHours() === 0) {
+        labels += `<line x1="${x}" x2="${x}" y1="${T - 6}" y2="${H - B}" stroke="${C.grid}" stroke-dasharray="2 3"/>
+          <text x="${x + 4}" y="${T - 8}" class="ax">${dayLabel(t, now || new Date())}</text>`;
+      }
       line += `${i ? "L" : "M"}${x + bw / 2} ${sy(r.soc_end)}`;
     });
     const pTicks = [0, maxP / 2, maxP].map((v) => `<text x="${L - 6}" y="${py(v) + 4}" text-anchor="end" class="ax">${v.toLocaleString("sv-SE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</text>`).join("");
+    let nowMark = "";
+    if (now) {
+      const t0 = new Date(plan[0].start).getTime();
+      const f = (now.getTime() - t0) / 3600e3;
+      if (f >= 0 && f <= n) {
+        const x = L + f * bw;
+        nowMark = `<line x1="${x}" x2="${x}" y1="${T - 4}" y2="${H - B}" stroke="${C.now}" stroke-width="1.5"/>
+          <rect x="${x - 14}" y="${T - 20}" width="28" height="15" rx="7" fill="${C.now}"/>
+          <text x="${x}" y="${T - 9}" text-anchor="middle" class="nowtxt">Nu</text>`;
+      }
+    }
     const sTicks = [0, socMax].map((v) => `<text x="${W - R + 6}" y="${sy(v) + 4}" class="ax">${Math.round(v)}</text>`).join("");
     return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Elpris och planerad laddning per timme">
       <line x1="${L}" x2="${W - R}" y1="${midY}" y2="${midY}" stroke="${C.grid}"/>
       ${bars}${energy}
       <path d="${line}" fill="none" stroke="#ffffff" stroke-opacity="0.85" stroke-width="2"/>
-      ${pTicks}${sTicks}${labels}
+      ${pTicks}${sTicks}${labels}${nowMark}
       <text x="2" y="12" class="ax">kr/kWh</text>
       <text x="${W - 2}" y="12" text-anchor="end" class="ax">kWh</text>
     </svg>`;
@@ -282,6 +391,14 @@ class BatteryPlannerCard extends HTMLElement {
       .sw { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
       .sw.price { background:${C.price}; } .sw.ch { background:${C.cyan}; } .sw.dis { background:${C.amber}; }
       .sw.soc { background:#fff; height:2px; vertical-align:3px; }
+      .sw.now { background:${C.now}; width:2px; }
+      .chart .nowtxt { font-size:10px; font-weight:600; fill:#fff; }
+      .tabs { display:flex; gap:6px; margin:6px 0 2px; }
+      .tabs button { font:inherit; font-size:0.8em; padding:4px 12px; border-radius:14px; border:1px solid ${C.grid}; background:transparent; color:${C.muted}; cursor:pointer; }
+      .tabs button.on { background:rgba(34,195,230,0.15); border-color:transparent; color:${C.cyan}; }
+      .crow.day { grid-template-columns:70px 1fr auto auto; }
+      .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:2px; }
+      .dot.ch { background:${C.cyan}; } .dot.sun { background:#ffd54a; } .dot.dis { background:${C.amber}; } .dot.sell { background:${C.sell}; }
       .next { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:10px; background:rgba(127,127,127,0.1); font-size:0.95em; }
       .next ha-icon { --mdc-icon-size:18px; color:${C.cyan}; }
       .charging { margin-top:10px; }
