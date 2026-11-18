@@ -13,7 +13,7 @@ from .sensor import _Base
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     c = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([CarChargeNow(c), BatteryGridCharge(c)])
+    async_add_entities([CarChargeNow(c), BatteryGridCharge(c), SpareHeatAllowed(c)])
 
 
 class CarChargeNow(_Base, BinarySensorEntity):
@@ -37,3 +37,20 @@ class BatteryGridCharge(_Base, BinarySensorEntity):
     def is_on(self):
         plan = self.data.get("plan") or []
         return bool(plan and plan[0].get("grid_charge", 0) > 0.05)
+
+
+class SpareHeatAllowed(_Base, BinarySensorEntity):
+    """On when the battery has enough spare energy to run the configured extra load for an hour."""
+
+    _attr_icon = "mdi:radiator"
+
+    def __init__(self, c):
+        super().__init__(c, "spare_heat_allowed", "Element får köra på batteriet")
+
+    @property
+    def is_on(self):
+        return bool((self.data.get("spare") or {}).get("far_kora"))
+
+    @property
+    def extra_state_attributes(self):
+        return self.data.get("spare") or {}

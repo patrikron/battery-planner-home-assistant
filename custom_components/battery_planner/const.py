@@ -2,7 +2,7 @@
 
 DOMAIN = "battery_planner"
 NAME = "Batteriplanerare"
-VERSION = "0.6.6"
+VERSION = "0.7.0"
 
 CONF_PRICE_ENTITY = "price_entity"
 CONF_SELL_ENTITY = "sell_entity"
@@ -39,6 +39,8 @@ CONF_USE_SOLAR_FORECAST = "use_solar_forecast"
 CONF_MAX_SOC = "max_soc_pct"
 CONF_BATTERY_PRICE = "battery_price"
 CONF_LIFETIME_MWH = "lifetime_mwh"
+CONF_SPARE_HEAT_KW = "spare_heat_kw"
+CONF_SPARE_BUFFER = "spare_buffer_pct"
 
 MODE_SHADOW = "shadow"          # plans and simulates, controls nothing
 MODES = [MODE_SHADOW]
@@ -62,6 +64,8 @@ DEFAULTS = {
     CONF_MAX_SOC: 100,
     CONF_BATTERY_PRICE: 0,
     CONF_LIFETIME_MWH: 0,
+    CONF_SPARE_HEAT_KW: 0.0,
+    CONF_SPARE_BUFFER: 20,
 }
 
 HISTORY_DAYS = 29
@@ -70,4 +74,5 @@ SOLAR_WEEKS = 1
 STEP_KWH = 0.25
 HIGH_SOC = 0.8           # above this the planner prefers to charge late
 HOLD_COST = 0.002        # kr per kWh and hour kept above HIGH_SOC (tie-breaker only)
+SPARE_OFF_HOURS = 0.5    # "Element får köra" stays on until the spare covers less than this many hours
 STORAGE_VERSION = 1

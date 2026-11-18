@@ -37,6 +37,8 @@
           "use_solar_forecast": "Use the solar forecast from the Energy dashboard",
           "max_soc_pct": "Maximum state of charge",
           "battery_price": "Battery price after deduction (optional)",
+          "spare_heat_kw": "Power that may run on spare battery energy, e.g. heaters (0 = off)",
+          "spare_buffer_pct": "Consumption buffer for spare battery energy (%)",
           "lifetime_mwh": "Warranted throughput in total (optional)"
         }
       }
@@ -79,6 +81,8 @@
           "use_solar_forecast": "Use the solar forecast from the Energy dashboard",
           "max_soc_pct": "Maximum state of charge",
           "battery_price": "Battery price after deduction (optional)",
+          "spare_heat_kw": "Power that may run on spare battery energy, e.g. heaters (0 = off)",
+          "spare_buffer_pct": "Consumption buffer for spare battery energy (%)",
           "lifetime_mwh": "Warranted throughput in total (optional)"
         }
       }

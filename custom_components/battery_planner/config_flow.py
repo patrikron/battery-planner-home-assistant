@@ -17,6 +17,7 @@ from .const import (
     CONF_IMPORT_ENTITY, CONF_MAX_CHARGE, CONF_MAX_DISCHARGE, CONF_MIN_SOC, CONF_PRICE_ENTITY,
     CONF_SELL_ENTITY, CONF_WEAR_COST, DEFAULTS, DOMAIN, NAME, CONF_PV_ENTITY, CONF_USE_SOLAR_FORECAST,
     CONF_MAX_SOC, CONF_BATTERY_PRICE, CONF_LIFETIME_MWH, CONF_SELL_MARGIN, CONF_SELL_BUFFER,
+    CONF_SPARE_HEAT_KW, CONF_SPARE_BUFFER,
 )
 
 
@@ -66,6 +67,8 @@ def _schema(d: dict[str, Any]) -> vol.Schema:
         vol.Required(CONF_CAR_CAPACITY, default=g(CONF_CAR_CAPACITY)): _num(10, 200, 0.1, "kWh"),
         vol.Required(CONF_CAR_POWER, default=g(CONF_CAR_POWER)): _num(1, 22, 0.1, "kW"),
         vol.Required(CONF_CAR_READY_BY, default=g(CONF_CAR_READY_BY)): selector.TimeSelector(),
+        vol.Required(CONF_SPARE_HEAT_KW, default=g(CONF_SPARE_HEAT_KW)): _num(0, 20, 0.1, "kW"),
+        vol.Required(CONF_SPARE_BUFFER, default=g(CONF_SPARE_BUFFER)): _num(0, 100, 1, "%"),
     }
     return vol.Schema(fields)
 
