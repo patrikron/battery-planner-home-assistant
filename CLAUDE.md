@@ -4,7 +4,7 @@ Läs hela filen innan du ändrar något. Repot är publikt: skriv bara teknisk i
 
 ## Komponenten
 
-En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.6.5**.
+En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.6.6**.
 
 - **Skuggläge:** planerar och simulerar ett virtuellt batteri, men styr ingenting. Skuggläget får aldrig ändra något i Home Assistant.
 - Styrning ska vara ett eget läge, avstängt som standard.

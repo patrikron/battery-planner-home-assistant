@@ -7,7 +7,7 @@
  * type: custom:battery-planner-insights-card   scenarier, besparing per dag, prognos mot utfall
  * entity: sensor.batteriplanerare_plan   (valfri, standard)
  */
-const CARD_VERSION = "0.6.5";
+const CARD_VERSION = "0.6.6";
 
 const C = {
   bg: "var(--ha-card-background, var(--card-background-color, #14161b))",
@@ -174,11 +174,29 @@ class BatteryPlannerCard extends HTMLElement {
       });
     }
     if (!this._view) this._view = "next";
+    this._sig = null; // render again with the new config
   }
 
   set hass(hass) {
+    // Home Assistant sets hass on every state change in the whole system. Re-rendering each
+    // time replaced the tab buttons between press and release, so clicks were lost.
+    // Only render when one of the card's own entities has changed.
     this._hass = hass;
+    const c = this._config || {};
+    const sig = [c.entity, c.soc_entity, c.soc_kwh_entity, c.today_entity, c.month_entity, c.error_entity]
+      .map((id) => (hass.states[id] ? hass.states[id].last_updated : "")).join("|");
+    if (sig === this._sig) return;
+    this._sig = sig;
     this._render();
+  }
+
+  connectedCallback() {
+    // Move the "Nu" marker along even when no entity changes
+    this._tick = setInterval(() => this._render(), 60e3);
+  }
+
+  disconnectedCallback() {
+    clearInterval(this._tick);
   }
 
   getCardSize() {
