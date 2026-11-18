@@ -1,0 +1,36 @@
+# Skapar en GitHub-release (t.ex. v0.6.4) när versionen i manifest.json ändras på main.
+# HACS visar då versionsnumret i stället för en commit-hash.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [custom_components/battery_planner/manifest.json, .github/workflows/release.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Läs version
+        id: v
+        run: echo "version=$(jq -r .version custom_components/battery_planner/manifest.json)" >> "$GITHUB_OUTPUT"
+      - name: Kontrollera att versionen är samma på alla ställen
+        run: |
+          v="${{ steps.v.outputs.version }}"
+          grep -q "VERSION = \"$v\"" custom_components/battery_planner/const.py
+          grep -q "CARD_VERSION = \"$v\"" custom_components/battery_planner/www/battery-planner-card.js
+      - name: Skapa release om den saknas
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.v.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "$tag finns redan"
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          fi

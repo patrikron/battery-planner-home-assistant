@@ -4,7 +4,7 @@ Läs hela filen innan du ändrar något. Repot är publikt: skriv bara teknisk i
 
 ## Komponenten
 
-En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.6.4**.
+En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.6.5**.
 
 - **Skuggläge:** planerar och simulerar ett virtuellt batteri, men styr ingenting. Skuggläget får aldrig ändra något i Home Assistant.
 - Styrning ska vara ett eget läge, avstängt som standard.
@@ -70,4 +70,5 @@ python3 -m pytest -q tests    # körs från repots rot, 14 tester ska gå igenom
 - `tests/conftest.py` begär `recorder_mock` före `enable_custom_integrations`, och `pytest.ini` sätter `asyncio_mode = auto`.
 - `http` och `frontend` är `after_dependencies`, och kortet registreras bara om de finns. Annars går testerna sönder.
 - Koden ligger i GitHub-repot `patrikron/battery-planner-home-assistant` (gren `main`). Höj versionen på tre ställen vid varje release: `const.py`, `manifest.json` och `CARD_VERSION` i kortet.
+- `.github/workflows/release.yml` skapar en GitHub-release `vX.Y.Z` när versionen i `manifest.json` ändras på `main` (och kontrollerar att de tre ställena stämmer). HACS visar annars bara commit-hashen. Releasen kan också startas för hand under Actions → Release → Run workflow.
 - Installation för hand: kopiera `custom_components/battery_planner` till `/config/custom_components/`, starta om Home Assistant, fyll i nya fält under Batteriplanerare → Konfigurera och ladda om webbläsaren med Ctrl+F5.

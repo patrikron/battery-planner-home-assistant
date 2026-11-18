@@ -63,4 +63,7 @@ async def test_solar_forecast_and_scenarios(hass):
         assert tot["grid"] > tot["solar"]                 # solar lowers the bill
         assert abs(tot["solar"] - tot["batt"]) < 1e-6     # idle battery changes nothing
         assert c._pv_ratio() == 0.75                      # forecast 4, actual 3
+        booked = [h for h in c.state["hours"] if h["start"] > (now_h - timedelta(hours=25)).isoformat()]
+        assert len(booked) == 24                          # history for the card's history tab
+        assert all(h["grid_charge"] == h["to_load"] == h["to_grid"] == 0 for h in booked)
     assert hass.states.get("sensor.batteriplanerare_solprognos_kommande_dygn") is not None

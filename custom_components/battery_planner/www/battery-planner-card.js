@@ -3,11 +3,11 @@
  * type: custom:battery-planner-card            plan, laddnivå, planerad laddning, besparing
  *   show_charging: true   (lista med planerade laddtillfällen)
  *   charging_rows: 6
- *   Flikar "Närmaste dygnet" och "Imorgon" visar graf och schema för respektive period.
+ *   Flikar "Närmaste dygnet", "Imorgon" och "Historik" (vad batteriet gjorde, dag för dag, ca 8 dygn bakåt).
  * type: custom:battery-planner-insights-card   scenarier, besparing per dag, prognos mot utfall
  * entity: sensor.batteriplanerare_plan   (valfri, standard)
  */
-const CARD_VERSION = "0.6.4";
+const CARD_VERSION = "0.6.5";
 
 const C = {
   bg: "var(--ha-card-background, var(--card-background-color, #14161b))",
@@ -85,6 +85,10 @@ function chargeSessions(plan) {
   return out;
 }
 
+function isoDay(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function sameDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
@@ -157,6 +161,12 @@ class BatteryPlannerCard extends HTMLElement {
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
       this.shadowRoot.addEventListener("click", (e) => {
+        const nav = e.target.closest && e.target.closest("[data-day]");
+        if (nav) {
+          this._histDay = nav.dataset.day;
+          this._render();
+          return;
+        }
         const b = e.target.closest && e.target.closest("[data-view]");
         if (!b) return;
         this._view = b.dataset.view;
@@ -199,8 +209,9 @@ class BatteryPlannerCard extends HTMLElement {
     const plan = full.slice(0, c.hours);
     const cur = plan[0] ? plan[0].action : "idle";
     const tom = tomorrowRows(full, now);
-    const view = this._view === "tomorrow" ? "tomorrow" : "next";
+    const view = ["tomorrow", "history"].includes(this._view) ? this._view : "next";
     const shown = view === "tomorrow" ? tom : plan;
+    const hist = st.attributes.historik || [];
     const soc = this._num(c.soc_entity);
     const socKwh = this._num(c.soc_kwh_entity);
     const today = this._num(c.today_entity);
@@ -229,21 +240,22 @@ class BatteryPlannerCard extends HTMLElement {
         <div class="tabs" role="tablist">
           <button role="tab" data-view="next" class="${view === "next" ? "on" : ""}" aria-selected="${view === "next"}">Närmaste dygnet</button>
           <button role="tab" data-view="tomorrow" class="${view === "tomorrow" ? "on" : ""}" aria-selected="${view === "tomorrow"}">Imorgon${tom.length ? "" : " (inga priser än)"}</button>
+          <button role="tab" data-view="history" class="${view === "history" ? "on" : ""}" aria-selected="${view === "history"}">Historik</button>
         </div>
-        ${view === "tomorrow" && !tom.length
+        ${view === "history" ? this._history(hist, now) : view === "tomorrow" && !tom.length
           ? `<div class="empty">Morgondagens elpriser har inte kommit än. De brukar publiceras runt kl. 13, sedan planeras morgondagen.</div>`
           : this._chart(shown, view === "next" ? now : null)}
-        <div class="legend">
+        ${view === "history" ? "" : `<div class="legend">
           <span><i class="sw price"></i>Elpris</span>
           <span><i class="sw ch"></i>Laddning</span>
           <span><i class="sw dis"></i>Urladdning</span>
           <span><i class="sw soc"></i>Laddnivå</span>
           ${view === "next" ? `<span><i class="sw now"></i>Nu</span>` : ""}
-        </div>
-        ${view === "tomorrow"
+        </div>`}
+        ${view === "history" ? "" : view === "tomorrow"
           ? this._daySchedule(tom)
           : `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>${nextEventText(plan)}</div>`}
-        ${c.show_charging ? this._charging(st.attributes.plan || []) : ""}
+        ${c.show_charging && view !== "history" ? this._charging(st.attributes.plan || []) : ""}
         ${(car.perioder && car.perioder.length) || (vvb.perioder && vvb.perioder.length) || car.inkopplad === false ? `<div class="loads">
           ${vvb.perioder ? `<div><ha-icon icon="mdi:water-boiler"></ha-icon><span>Varmvatten</span><b>${vvb.perioder.length ? `${spanTxt(vvb.perioder)} · ${vvb.planerat_kwh} kWh` : "inget planerat"}</b></div>` : ""}
           ${car.laddniva !== undefined ? `<div><ha-icon icon="mdi:car-electric"></ha-icon><span>Elbil</span><b>${car.inkopplad === false ? "inte inkopplad" : car.perioder && car.perioder.length ? `${spanTxt(car.perioder)} · ${car.planerat_kwh} kWh` : "fulladdad"}</b></div>` : ""}
@@ -284,13 +296,39 @@ class BatteryPlannerCard extends HTMLElement {
     </div>`;
   }
 
-  _daySchedule(rows) {
+  _history(hist, now) {
+    const days = [...new Set(hist.map((r) => isoDay(new Date(r.start))))].sort();
+    if (!days.length) return `<div class="empty">Ingen historik ännu. Varje avslutad timme sparas från och med version 0.6.5, så imorgon finns gårdagen här.</div>`;
+    const yest = isoDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
+    let day = this._histDay && days.includes(this._histDay) ? this._histDay : days.includes(yest) ? yest : days[days.length - 1];
+    const i = days.indexOf(day);
+    const rows = hist.filter((r) => isoDay(new Date(r.start)) === day);
+    const d = new Date(rows[0].start);
+    const sav = rows.reduce((a, r) => a + (r.saving || 0), 0);
+    const btn = (k, arrow, label) => `<button ${k ? `data-day="${k}"` : "disabled"} aria-label="${label}">${arrow}</button>`;
+    return `<div class="daynav">
+        ${btn(days[i - 1], "‹", "Föregående dag")}
+        <span><b>${dayLabel(d, now) === "Idag" ? "Idag hittills" : dayLabel(d, now) === "Imorgon" ? "Imorgon" : d.toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}</b>${sameDay(d, new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)) ? " · igår" : ""}</span>
+        <span class="sav">Sparade <b>${fmtKr(sav)}</b></span>
+        ${btn(days[i + 1], "›", "Nästa dag")}
+      </div>
+      ${this._chart(rows, null)}
+      <div class="legend">
+        <span><i class="sw price"></i>Elpris</span>
+        <span><i class="sw ch"></i>Laddning</span>
+        <span><i class="sw dis"></i>Urladdning</span>
+        <span><i class="sw soc"></i>Laddnivå</span>
+      </div>
+      ${this._daySchedule(rows, "Det här gjorde batteriet", "Batteriet stod still hela dagen")}`;
+  }
+
+  _daySchedule(rows, title, idleTxt) {
     if (!rows.length) return "";
     const kwh = (v) => v.toLocaleString("sv-SE", { maximumFractionDigits: 1 });
     const sp = kindSpans(rows).filter((s) => s.kind !== "idle");
     const d = new Date(rows[0].start);
-    const head = `${d.toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}`;
-    if (!sp.length) return `<div class="charging"><div class="sub">Schema ${head}</div><div class="none">Batteriet står still hela dagen</div></div>`;
+    const head = title || `Schema ${d.toLocaleDateString("sv-SE", { weekday: "long", day: "numeric", month: "long" })}`;
+    if (!sp.length) return `<div class="charging"><div class="sub">${head}</div><div class="none">${idleTxt || "Batteriet står still hela dagen"}</div></div>`;
     const list = sp.map((s) => `<div class="crow day">
         <span class="when">${hh(s.from)}–${hh(s.to)}</span>
         <span class="amt"><i class="dot ${KIND_CLS[s.kind]}"></i>${KIND_TXT[s.kind]}</span>
@@ -304,7 +342,7 @@ class BatteryPlannerCard extends HTMLElement {
     if (sum("house") > 0.05) parts.push(`${kwh(sum("house"))} kWh till huset`);
     if (sum("sell") > 0.05) parts.push(`${kwh(sum("sell"))} kWh sålt`);
     return `<div class="charging">
-      <div class="sub">Schema ${head}</div>
+      <div class="sub">${head}</div>
       ${list}
       <div class="ctot">${parts.join(" · ")}</div>
     </div>`;
@@ -397,6 +435,11 @@ class BatteryPlannerCard extends HTMLElement {
       .tabs button { font:inherit; font-size:0.8em; padding:4px 12px; border-radius:14px; border:1px solid ${C.grid}; background:transparent; color:${C.muted}; cursor:pointer; }
       .tabs button.on { background:rgba(34,195,230,0.15); border-color:transparent; color:${C.cyan}; }
       .crow.day { grid-template-columns:70px 1fr auto auto; }
+      .daynav { display:flex; align-items:center; gap:8px; margin:8px 0 2px; font-size:0.9em; }
+      .daynav span:first-of-type { flex:1; }
+      .daynav .sav { color:${C.muted}; } .daynav .sav b { color:${C.amber}; }
+      .daynav button { background:transparent; border:1px solid ${C.grid}; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; color:${C.text}; cursor:pointer; padding:0; font-size:1.3em; line-height:1; }
+      .daynav button[disabled] { opacity:0.3; cursor:default; }
       .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:2px; }
       .dot.ch { background:${C.cyan}; } .dot.sun { background:#ffd54a; } .dot.dis { background:${C.amber}; } .dot.sell { background:${C.sell}; }
       .next { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:10px; background:rgba(127,127,127,0.1); font-size:0.95em; }
