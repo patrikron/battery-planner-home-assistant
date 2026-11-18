@@ -2,7 +2,7 @@
 
 DOMAIN = "battery_planner"
 NAME = "Batteriplanerare"
-VERSION = "0.6.1"
+VERSION = "0.6.2"
 
 CONF_PRICE_ENTITY = "price_entity"
 CONF_SELL_ENTITY = "sell_entity"
@@ -17,6 +17,7 @@ CONF_EFFICIENCY = "roundtrip_efficiency_pct"
 CONF_FUSE_A = "main_fuse_a"
 CONF_ALLOW_EXPORT = "allow_export"
 CONF_WEAR_COST = "wear_cost"
+CONF_SELL_MARGIN = "sell_margin"
 CONF_MODE = "mode"
 CONF_HEATING_ENTITIES = "heating_energy_entities"
 CONF_OUTDOOR_ENTITY = "outdoor_temp_entity"
@@ -50,6 +51,7 @@ DEFAULTS = {
     CONF_FUSE_A: 16,
     CONF_ALLOW_EXPORT: False,
     CONF_WEAR_COST: 0.05,
+    CONF_SELL_MARGIN: 0.10,
     CONF_FIRE_THRESHOLD: 40,
     CONF_CAR_CAPACITY: 77.4,
     CONF_CAR_POWER: 11.0,

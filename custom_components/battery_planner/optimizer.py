@@ -27,6 +27,8 @@ class BatteryParams:
     eff_discharge: float = 0.95
     wear_cost: float = 0.05        # kr per kWh delivered from the battery
     allow_export: bool = False     # may the battery sell to the grid
+    sell_margin: float = 0.0       # extra kr/kWh a sale must beat (planning only, not part of reported cost)
+    export_limit_kwh: float | None = None  # max kWh exported per hour (main fuse); None = no limit
     step_kwh: float = 0.25         # state of charge resolution
     high_soc: float = 0.8          # fraction above which standing charge is discouraged
     hold_cost: float = 0.0         # kr per kWh and hour kept above high_soc (not part of reported cost)
@@ -95,6 +97,8 @@ def _transition(a: float, b: float, h: int, price, sell, load, surplus, grid_roo
         to_grid = delivered - to_load
         if to_grid > 1e-6 and not bp.allow_export:
             return None
+        if bp.export_limit_kwh is not None and to_grid > 1e-6 and to_grid + S > bp.export_limit_kwh + 1e-9:
+            return None
         cost = base - to_load * p - to_grid * s + delivered * bp.wear_cost
         return cost, (0.0, 0.0, to_load, to_grid)
     return base, (0.0, 0.0, 0.0, 0.0)
@@ -128,6 +132,7 @@ def optimize(price, sell, load, surplus, grid_room, soc0: float, bp: BatteryPara
     # value[j] = min cost from hour h to end starting at levels[j]
     INF = float("inf")
     hold, hold_from = bp.hold_cost, bp.capacity_kwh * bp.high_soc
+    margin = bp.sell_margin
     value = [-(lv - lo) * terminal_value for lv in levels]
     choice: list[list[int]] = [[0] * len(levels) for _ in range(n)]
     for h in range(n - 1, -1, -1):
@@ -141,6 +146,8 @@ def optimize(price, sell, load, surplus, grid_room, soc0: float, bp: BatteryPara
                 if t is None:
                     continue
                 c = t[0] + value[j]
+                if margin and t[1][3] > 0:
+                    c += t[1][3] * margin
                 if hold and b > hold_from:
                     c += (b - hold_from) * hold
                 if c < best - 1e-12:
@@ -190,6 +197,8 @@ def apply_hour(planned: HourPlan, soc: float, price: float, sell: float, load: f
         to_grid = 0.0
         if bp.allow_export and planned.to_grid > 0:
             to_grid = max(0.0, min(planned.to_grid, avail - to_load, bp.max_discharge_kw - to_load))
+            if bp.export_limit_kwh is not None:
+                to_grid = max(0.0, min(to_grid, bp.export_limit_kwh - surplus))
         # Do not discharge more than planned unless load is higher than forecast
         delivered = min(to_load + to_grid, max(want, to_load))
         to_load = min(to_load, delivered)

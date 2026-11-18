@@ -4,7 +4,7 @@ Läs hela filen innan du ändrar något. Repot är publikt: skriv bara teknisk i
 
 ## Komponenten
 
-En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.6.1**.
+En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.6.2**.
 
 - **Skuggläge:** planerar och simulerar ett virtuellt batteri, men styr ingenting. Skuggläget får aldrig ändra något i Home Assistant.
 - Styrning ska vara ett eget läge, avstängt som standard.
@@ -13,7 +13,7 @@ En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i ko
 
 | Fil | Innehåll |
 |---|---|
-| `optimizer.py` | Dynamisk programmering över diskretiserad laddnivå (steg 0,25 kWh), i ren Python utan scipy.<br>`BatteryParams` innehåller `wear_cost`, `max_soc`, `high_soc` och `hold_cost`.<br>`optimize()` tar fram planen. Slutvärdet är undre kvartilens pris × verkningsgrad × 0,9.<br>`apply_hour()` simulerar en verklig timme. |
+| `optimizer.py` | Dynamisk programmering över diskretiserad laddnivå (steg 0,25 kWh), i ren Python utan scipy.<br>`BatteryParams` innehåller `wear_cost`, `max_soc`, `high_soc`, `hold_cost`, `sell_margin` (straff per såld kWh, bara i planeringen) och `export_limit_kwh` (säkringen begränsar export).<br>`optimize()` tar fram planen. Slutvärdet är undre kvartilens pris × verkningsgrad × 0,9.<br>`apply_hour()` simulerar en verklig timme. |
 | `forecast.py` | Profil per veckodag och timme (4 veckor) med inlärd korrigering per timme.<br>Uppvärmningsmodell och eldfaktorer: kamin över tröskeln (standard 40 °C) räknas som eld.<br>Eldfaktorer för 0–8 h efter eld lärs in ur historiken. |
 | `loads.py` | `vvb_schedule()` läser varmvattenplanerarens `periods` (`s`/`e` i ms, `kwh`).<br>`car_need_kwh()`.<br>`schedule_car()` väljer de billigaste timmarna före klar-tiden inom säkringen.<br>`spans()`. |
 | `coordinator.py` | Uppdateras var 15:e minut och vid minut 1 varje timme. Använder Store för tillståndet.<br>`_history()` läser timstatistik via recorder.<br>`_solar_forecast()` hämtar solprognos via Energipanelens plattformar.<br>`_pv_ratio()` justerar solprognosen med en faktor 0,4–1,6.<br>`_book_finished_hours()` bokför scenarier, cykler och prognos mot utfall.<br>`_health()` och `_summary()`. |
@@ -64,7 +64,7 @@ Referens: [johanzander/bess-manager](https://github.com/johanzander/bess-manager
 
 ```bash
 pip install pytest-homeassistant-custom-component   # testat med 0.13.316 / HA 2026.2.3
-python3 -m pytest -q tests    # körs från repots rot, 10 tester ska gå igenom
+python3 -m pytest -q tests    # körs från repots rot, 13 tester ska gå igenom
 ```
 
 - `tests/conftest.py` begär `recorder_mock` före `enable_custom_integrations`, och `pytest.ini` sätter `asyncio_mode = auto`.
