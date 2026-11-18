@@ -12,7 +12,7 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/patrikron/battery-planner-home-assistant/issues",
   "requirements": [],
-  "version": "0.6.1",
+  "version": "0.6.2",
   "after_dependencies": [
     "http",
     "frontend",

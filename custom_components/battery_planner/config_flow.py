@@ -16,7 +16,7 @@ from .const import (
     CONF_CAR_SOC_ENTITY, CONF_CAR_TARGET_ENTITY, CONF_VVB_ENERGY_ENTITY, CONF_VVB_PLAN_ENTITY,
     CONF_IMPORT_ENTITY, CONF_MAX_CHARGE, CONF_MAX_DISCHARGE, CONF_MIN_SOC, CONF_PRICE_ENTITY,
     CONF_SELL_ENTITY, CONF_WEAR_COST, DEFAULTS, DOMAIN, NAME, CONF_PV_ENTITY, CONF_USE_SOLAR_FORECAST,
-    CONF_MAX_SOC, CONF_BATTERY_PRICE, CONF_LIFETIME_MWH,
+    CONF_MAX_SOC, CONF_BATTERY_PRICE, CONF_LIFETIME_MWH, CONF_SELL_MARGIN,
 )
 
 
@@ -46,6 +46,7 @@ def _schema(d: dict[str, Any]) -> vol.Schema:
         vol.Required(CONF_BATTERY_PRICE, default=g(CONF_BATTERY_PRICE)): _num(0, 500000, 100, "kr"),
         vol.Required(CONF_LIFETIME_MWH, default=g(CONF_LIFETIME_MWH)): _num(0, 1000, 0.1, "MWh"),
         vol.Required(CONF_ALLOW_EXPORT, default=g(CONF_ALLOW_EXPORT)): selector.BooleanSelector(),
+        vol.Required(CONF_SELL_MARGIN, default=g(CONF_SELL_MARGIN)): _num(0, 5, 0.01, "kr/kWh"),
         vol.Optional(CONF_HEATING_ENTITIES, default=d.get(CONF_HEATING_ENTITIES, [])): selector.EntitySelector(
             selector.EntitySelectorConfig(domain="sensor", multiple=True)),
         vol.Optional(CONF_OUTDOOR_ENTITY, default=d.get(CONF_OUTDOOR_ENTITY, vol.UNDEFINED)): sensor,
