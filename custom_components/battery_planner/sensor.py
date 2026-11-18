@@ -49,6 +49,8 @@ class _Base(CoordinatorEntity[BatteryPlannerCoordinator], SensorEntity):
 
 class PlanSensor(_Base):
     _attr_icon = "mdi:battery-clock"
+    # The hour history is large and only meant for the card, so keep it out of the recorder
+    _unrecorded_attributes = frozenset({"historik"})
 
     def __init__(self, c):
         super().__init__(c, "plan", "Plan")
@@ -71,6 +73,7 @@ class PlanSensor(_Base):
             "scenarier": self.data.get("scenarios", {}),
             "dagar": self.data.get("days", {}),
             "halsa": self.data.get("health", {}),
+            "historik": self.data.get("history", []),
         }
 
 

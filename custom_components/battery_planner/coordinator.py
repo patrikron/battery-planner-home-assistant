@@ -40,6 +40,9 @@ def _hour(t: datetime) -> datetime:
     return dt_util.as_local(t).replace(minute=0, second=0, microsecond=0)
 
 
+HOURS_KEEP = 24 * 8  # hours of booked history shown in the card
+
+
 def _parse_time(v: Any) -> datetime | None:
     if isinstance(v, datetime):
         return v
@@ -118,6 +121,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.state.setdefault("days", {})             # "YYYY-MM-DD" -> scenario costs, forecast vs actual
         self.state.setdefault("pv_pairs", [])         # [ [iso, raw forecast, actual], ... ]
         self.state.setdefault("throughput", 0.0)      # kWh delivered from the battery in total
+        self.state.setdefault("hours", [])            # booked hours (last HOURS_KEEP) for the card's history tab
 
     async def _save(self) -> None:
         await self._store.async_save(self.state)
@@ -450,6 +454,16 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 hp, soc, prices[t], sells.get(t, 0.0), load, surplus, max(0.0, self.fuse_kwh - load), bp
             )
             delivered = max(0.0, soc_before - soc) * bp.eff_discharge
+            # What the battery actually did this hour, split the same way as apply_hour()
+            drawn = max(0.0, soc - soc_before) / bp.eff_charge
+            solar_in = min(surplus, drawn)
+            to_load = min(load, delivered)
+            self.state["hours"] = (self.state["hours"] + [{
+                "start": t.isoformat(), "price": round(prices[t], 3),
+                "grid_charge": round(drawn - solar_in, 2), "solar_charge": round(solar_in, 2),
+                "to_load": round(to_load, 2), "to_grid": round(delivered - to_load, 2),
+                "soc_end": round(soc, 2), "saving": round(cost_without - cost_with, 2),
+            }])[-HOURS_KEEP:]
             self.state["throughput"] = round(float(self.state["throughput"]) + delivered, 3)
             day = t.date().isoformat()
             self.state["savings"][day] = round(self.state["savings"].get(day, 0.0) + cost_without - cost_with, 3)
@@ -529,6 +543,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "solar": getattr(self, "_solar_info", {}),
             "health": self._health(days),
             "plan": self.state["plan"],
+            "history": self.state["hours"],
             "current_action": cur["action"] if cur else None,
             "soc_kwh": round(float(self.state["soc"]), 2),
             "soc_pct": round(100 * float(self.state["soc"]) / self.params.capacity_kwh, 1),
