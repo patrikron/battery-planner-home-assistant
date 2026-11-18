@@ -40,3 +40,22 @@ def test_export_limited_by_fuse():
     sell = [0.5] * 4 + [10.0]
     res = _run(price, sell, _bp(export_limit_kwh=6.0), load=0.0)
     assert res.hours[4].to_grid <= 6.0 + 1e-6
+
+
+def test_buffer_keeps_energy_for_expensive_hours():
+    # Charge cheaply, a sell peak at hour 4, then expensive hours with a house load of 2 kWh/h.
+    price = [1.0] * 4 + [3.0] + [3.0] * 4
+    sell = [0.5] * 4 + [2.5] + [0.5] * 4
+    load = [0.0] * 5 + [2.0] * 4
+    n = len(price)
+
+    def run(buf):
+        bp = _bp(sell_buffer=buf)
+        return optimize(price, sell, load, [0.0] * n, [10.0] * n, bp.lo, bp, terminal_value=0.0)
+
+    plain, buffered = run(0.0), run(0.2)
+    sold_plain = plain.hours[4].to_grid
+    sold_buffered = buffered.hours[4].to_grid
+    # The buffered plan sells less and keeps more for the expensive hours after the peak.
+    assert sold_buffered < sold_plain - 1.0
+    assert buffered.hours[4].soc_end > plain.hours[4].soc_end + 0.8
