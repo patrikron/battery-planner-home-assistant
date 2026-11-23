@@ -223,3 +223,27 @@ def apply_hour(planned: HourPlan, soc: float, price: float, sell: float, load: f
         return soc, base - to_load * price - to_grid * sell + delivered * bp.wear_cost, base
     # idle: solar surplus that would be exported may still be stored if it pays
     return soc, base, base
+
+
+def spare_energy(hours: list[HourPlan], soc0: float, bp: BatteryParams, buffer: float = 0.2):
+    """Energy the battery can give away now without missing anything the plan needs.
+
+    Looks at the hours up to the next time the plan charges the battery (from the
+    grid or from solar). Until then the state of charge only goes down, so whatever
+    is left above the reserve at that point is spare. The planned discharge to the
+    house is counted with the load buffer (0.2 = the load turns out 20 % higher).
+
+    Returns (spare kWh delivered to the house, number of hours until the next charge).
+    The spare is 0 while the battery is charging.
+    """
+    needed = 0.0
+    end = len(hours)
+    for k, hp in enumerate(hours):
+        if hp.grid_charge + hp.solar_charge > 0.05:
+            end = k
+            break
+        needed += (hp.to_load * (1 + buffer) + hp.to_grid) / bp.eff_discharge
+    if end == 0:
+        return 0.0, 0
+    spare = (min(soc0, bp.hi) - bp.lo - needed) * bp.eff_discharge
+    return max(0.0, spare), end

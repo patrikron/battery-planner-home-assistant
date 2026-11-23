@@ -25,7 +25,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         SavingSensor(c, "saving_today", "Besparing idag"),
         SavingSensor(c, "saving_month", "Besparing denna månad"),
         SavingSensor(c, "saving_total", "Besparing totalt", total=True),
-        ForecastErrorSensor(c), CarPlanSensor(c), SolarForecastSensor(c), CyclesSensor(c),
+        ForecastErrorSensor(c), CarPlanSensor(c), SolarForecastSensor(c), CyclesSensor(c), SpareSensor(c),
     ])
 
 
@@ -185,3 +185,21 @@ class CyclesSensor(_Base):
     @property
     def extra_state_attributes(self):
         return self.data.get("health") or {}
+
+
+class SpareSensor(_Base):
+    _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:battery-plus-outline"
+
+    def __init__(self, c):
+        super().__init__(c, "spare", "Batteriöverskott")
+
+    @property
+    def native_value(self):
+        return (self.data.get("spare") or {}).get("kwh")
+
+    @property
+    def extra_state_attributes(self):
+        return self.data.get("spare") or {}

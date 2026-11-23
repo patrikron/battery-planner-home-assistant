@@ -24,14 +24,14 @@ from .const import (
     CONF_CAR_CAPACITY, CONF_CAR_ENERGY_ENTITY, CONF_CAR_PLUG_ENTITY, CONF_CAR_POWER, CONF_CAR_READY_BY,
     CONF_CAR_SOC_ENTITY, CONF_CAR_TARGET_ENTITY, CONF_VVB_ENERGY_ENTITY, CONF_VVB_PLAN_ENTITY,
     CONF_PV_ENTITY, CONF_USE_SOLAR_FORECAST, CONF_MAX_SOC, CONF_BATTERY_PRICE, CONF_LIFETIME_MWH,
-    HIGH_SOC, HOLD_COST,
+    HIGH_SOC, HOLD_COST, CONF_SPARE_HEAT_KW, CONF_SPARE_BUFFER, SPARE_OFF_HOURS,
 )
 from .loads import car_need_kwh, next_ready_by, schedule_car, spans, vvb_schedule
 from .forecast import (
     DEFAULT_FIRE_FACTORS, build_profile, fit_heating, forecast, heating_forecast, heating_model,
     hours_since_fire, learn_fire_factors, typical_fire_hours, update_correction,
 )
-from .optimizer import BatteryParams, HourPlan, apply_hour, optimize
+from .optimizer import BatteryParams, HourPlan, apply_hour, optimize, spare_energy
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,6 +80,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self.state: dict[str, Any] = {}
         self._unsub = async_track_time_change(hass, self._on_new_hour, minute=1, second=30)
+        self._spare_on = False
 
     # ---------- config ----------
     def _opt(self, key: str):
@@ -408,6 +409,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for t, p, l, bs, hf, vv, cc, s, hp, cf, pv, pr in zip(
                 horizon, price, load, base, heat_fc, vvb_fc, car_fc, surplus, result.hours, cons_fc, pv_fc, pv_raw)
         ]
+        self._spare_info = self._spare(result.hours, horizon, bp)
         # Snapshot of the day's forecast, taken at the first plan after midnight
         today = now_h.date().isoformat()
         day = self.state["days"].setdefault(today, {})
@@ -419,6 +421,24 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             day["saving_fc"] = round(result.saving, 1)
         await self._save()
         return self._summary(result)
+
+    def _spare(self, hours, horizon, bp: BatteryParams) -> dict[str, Any]:
+        """Battery energy left over before the next charge, and whether extra load may run on it."""
+        buffer = float(self._opt(CONF_SPARE_BUFFER)) / 100
+        spare, n = spare_energy(hours, float(self.state["soc"]), bp, buffer)
+        kw = float(self._opt(CONF_SPARE_HEAT_KW) or 0.0)
+        # On when the spare covers a full hour at that power; stays on down to half an hour.
+        need = kw * (SPARE_OFF_HOURS if self._spare_on else 1.0)
+        self._spare_on = kw > 0 and spare > 0 and spare >= need
+        return {
+            "kwh": round(spare, 2),
+            "racker_till": horizon[n].isoformat() if n < len(horizon) else None,
+            "timmar_till_laddning": n,
+            "effekt_kw": kw,
+            "timmar_med_effekt": round(spare / kw, 1) if kw > 0 else None,
+            "buffert_pct": round(buffer * 100),
+            "far_kora": self._spare_on,
+        }
 
     def _book_finished_hours(self, hist, prices, sells, bp: BatteryParams) -> None:
         """Apply the stored plan to every finished hour that has real measurements."""
@@ -557,4 +577,5 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "heating": getattr(self, "_heat_info", {}),
             "car": getattr(self, "_car_info", {}),
             "vvb": getattr(self, "_vvb_info", {}),
+            "spare": getattr(self, "_spare_info", {}),
         }

@@ -7,7 +7,7 @@
  * type: custom:battery-planner-insights-card   scenarier, besparing per dag, prognos mot utfall
  * entity: sensor.batteriplanerare_plan   (valfri, standard)
  */
-const CARD_VERSION = "0.6.6";
+const CARD_VERSION = "0.7.0";
 
 const C = {
   bg: "var(--ha-card-background, var(--card-background-color, #14161b))",

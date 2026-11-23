@@ -37,6 +37,8 @@
           "use_solar_forecast": "Använd solprognosen från Energipanelen",
           "max_soc_pct": "Högsta laddnivå",
           "battery_price": "Batteriets pris efter avdrag (valfritt)",
+          "spare_heat_kw": "Effekt som får köras på batteriöverskott, t.ex. element (0 = av)",
+          "spare_buffer_pct": "Buffert för förbrukningen vid batteriöverskott (%)",
           "lifetime_mwh": "Garanterad genomströmning totalt (valfritt)"
         }
       }
@@ -79,6 +81,8 @@
           "use_solar_forecast": "Använd solprognosen från Energipanelen",
           "max_soc_pct": "Högsta laddnivå",
           "battery_price": "Batteriets pris efter avdrag (valfritt)",
+          "spare_heat_kw": "Effekt som får köras på batteriöverskott, t.ex. element (0 = av)",
+          "spare_buffer_pct": "Buffert för förbrukningen vid batteriöverskott (%)",
           "lifetime_mwh": "Garanterad genomströmning totalt (valfritt)"
         }
       }
