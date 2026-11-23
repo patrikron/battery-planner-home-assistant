@@ -4,7 +4,7 @@ Läs hela filen innan du ändrar något. Repot är publikt: skriv bara teknisk i
 
 ## Komponenten
 
-En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.7.0**.
+En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.7.1**.
 
 - **Skuggläge:** planerar och simulerar ett virtuellt batteri, men styr ingenting. Skuggläget får aldrig ändra något i Home Assistant.
 - Styrning ska vara ett eget läge, avstängt som standard.
@@ -18,7 +18,8 @@ En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i ko
 | `loads.py` | `vvb_schedule()` läser varmvattenplanerarens `periods` (`s`/`e` i ms, `kwh`).<br>`car_need_kwh()`.<br>`schedule_car()` väljer de billigaste timmarna före klar-tiden inom säkringen.<br>`spans()`. |
 | `coordinator.py` | Uppdateras var 15:e minut och vid minut 1 varje timme. Använder Store för tillståndet.<br>`_history()` läser timstatistik via recorder.<br>`_solar_forecast()` hämtar solprognos via Energipanelens plattformar.<br>`_pv_ratio()` justerar solprognosen med en faktor 0,4–1,6.<br>`_book_finished_hours()` bokför scenarier, cykler och prognos mot utfall.<br>`_health()` och `_summary()`. |
 | `sensor.py` | `PlanSensor` har attributen `plan`, `uppvarmning`, `elbil`, `varmvatten`, `sol`, `scenarier`, `dagar` och `halsa`.<br>Övriga sensorer: laddnivå, kWh, besparing (idag, månad, totalt), prognosfel, elbil, solprognos, laddcykler och batteriöverskott. |
-| `binary_sensor.py` | "Elbil ska ladda nu", "Batteri laddar från nätet nu" och "Element får köra på batteriet" (på vid överskott ≥ effekt × 1 h, av under 0,5 h). |
+| `phase_guard.py` | Säkringsskydd per fas. `headroom_kw()` ger laddeffekt som ryms under säkringen minus marginal, utifrån den tyngsta fasen (med en riktig batteriladdning dras dess egen ström av).<br>`imbalance_factors()` lär tyngsta fas / medelfas per timme ur timstatistik. `room_kwh()` används i planeringen och i bokföringen via `coordinator.grid_room()`.<br>`PhaseGuard` är en tillståndsmaskin: sänker gränsen (10 %-steg) efter 45 s över målet och höjer efter 180 s med utrymme. Den räknar sänkningar, begränsade minuter och förlorade kWh per dag. |
+| `binary_sensor.py` | "Elbil ska ladda nu", "Batteri laddar från nätet nu", "Element får köra på batteriet" (på vid överskott ≥ effekt × 1 h, av under 0,5 h) och "Säkringsskyddet begränsar laddningen". |
 | `config_flow.py` | Ett enda formulär med alla fält, plus ett options flow med samma formulär. |
 | `www/battery-planner-card.js` | Två kort, som serveras automatiskt via `add_extra_js_url`:<br>`custom:battery-planner-card` visar plan, laddnivå och besparing.<br>`custom:battery-planner-insights-card` visar scenarier, besparing per dag och prognos mot utfall. |
 
@@ -53,7 +54,7 @@ MID-XH laddar och levererar med största sannolikhet lika mycket på alla tre fa
    - Skriv sällan till växelriktaren, och falla tillbaka till Load first om planen saknas.
    - Läs riktig laddnivå från batteriet i stället för den virtuella.
    - Testa stegvis när batteriet är installerat: först manuellt, sedan en natt med automatik.
-2. **Säkringsskydd per fas:** sänk `battery_first_charge_rate` så att den tyngsta fasen håller sig under säkringen. Växelriktaren fördelar effekten lika på alla faser.
+2. **Säkringsskydd per fas:** finns i skuggläge sedan 0.7.1 (`phase_guard.py`). I styrläget ska `PhaseGuard.limit_pct` skrivas till `battery_first_charge_rate`, bara när den ändras, och batteriets egen effekt skickas in som `battery_kw`.
 3. **Batteritemperatur och kvartsupplösning** (bess-manager planerar per 15 minuter).
 4. **Små nätladdningar mitt på dagen:** planen lägger ibland in 0,05–0,2 kWh nätladdning kl. 11–14. Det beror på avrundning till 0,25 kWh-steg och bör städas bort.
 5. **Solprognosen via Energipanelen** är bara testad med en simulerad prognos. Om kortet visar "export senaste veckan" som källa fungerar kopplingen inte.
@@ -64,7 +65,7 @@ Referens: [johanzander/bess-manager](https://github.com/johanzander/bess-manager
 
 ```bash
 pip install pytest-homeassistant-custom-component   # testat med 0.13.316 / HA 2026.2.3
-python3 -m pytest -q tests    # körs från repots rot, 17 tester ska gå igenom
+python3 -m pytest -q tests    # körs från repots rot, 23 tester ska gå igenom
 ```
 
 - `tests/conftest.py` begär `recorder_mock` före `enable_custom_integrations`, och `pytest.ini` sätter `asyncio_mode = auto`.

@@ -2,7 +2,7 @@
 
 Planerar när ett hembatteri ska laddas och användas, timme för timme, utifrån spotpris och en förbrukningsprognos som byggs från din egen historik.
 
-**Version 0.6 – skuggläge med två Lovelace-kort, batterihälsa, solprognos, scenariojämförelse, eldningsmedveten prognos och planering av varmvatten och elbil.** Planeraren styr ingenting. Den räknar fram en plan varje kvart och simulerar sedan, timme för timme, vad ett batteri hade gjort med din *verkliga* förbrukning och dina *verkliga* priser. Så kan du se vad batteriet skulle ha sparat, och hur bra prognosen är, innan batteriet är installerat.
+**Version 0.7 – skuggläge med två Lovelace-kort, säkringsskydd per fas, batterihälsa, solprognos, scenariojämförelse, eldningsmedveten prognos och planering av varmvatten och elbil.** Planeraren styr ingenting. Den räknar fram en plan varje kvart och simulerar sedan, timme för timme, vad ett batteri hade gjort med din *verkliga* förbrukning och dina *verkliga* priser. Så kan du se vad batteriet skulle ha sparat, och hur bra prognosen är, innan batteriet är installerat.
 
 ## Så fungerar den
 
@@ -86,6 +86,28 @@ Planeraren väger varje laddcykel mot vad den sliter på batteriet:
 - **Högsta laddnivå.** Sätt till exempel 90 % om du vill att batteriet aldrig laddas fullt.
 - **Sen laddning.** När två planer kostar lika mycket väljs den där batteriet står kortast tid över 80 %.
 - **Laddcykler och garanti.** `sensor.batteriplanerare_laddcykler` räknar ekvivalenta fulla cykler. Anger du garanterad genomströmning (till exempel 61,2 MWh för fyra Growatt APX-moduler) visas hur stor del av garantin som är förbrukad och hur många år den räcker i nuvarande takt.
+
+## Säkringsskydd per fas (valfritt)
+
+En hybridväxelriktare som Growatt MID-XH laddar lika mycket på alla tre faser. Därför är det den mest belastade fasen som avgör hur mycket batteriet kan ladda från nätet, inte den totala förbrukningen. Ange tre strömsensorer, en per fas (till exempel från en Tibber Pulse eller en energimätare), så gör planeraren två saker:
+
+- **Planeringen räknar med den tyngsta fasen.** Ur historiken lärs hur mycket tyngre den värsta fasen är än medelfasen, timme för timme. Laddningen per timme planeras så att den fasen håller sig under säkringen minus marginalen.
+- **Ett skydd följer strömmarna i realtid** och räknar ut vilken laddgräns batteriet borde ha just nu, i steg om 10 %:
+  - Korta toppar, som ett element som slår till, ignoreras. Gränsen sänks först när en fas har legat över målet i 45 sekunder.
+  - Gränsen höjs igen först när det har funnits utrymme i 3 minuter. Det ger få skrivningar till växelriktaren.
+  - En vanlig smältsäkring tål korta överlaster, men marginalen (standard 1 A) ger ändå lite luft.
+
+I skuggläge skrivs ingenting till växelriktaren. Skyddet räknar bara ut gränsen och bokför hur ofta den hade behövt sänkas, hur länge och hur många kWh laddning det kostade.
+
+Nya entiteter:
+
+| Entitet | Innehåll |
+|---|---|
+| `sensor.batteriplanerare_sakringsutrymme_for_laddning` | kW som ryms under säkringen just nu, med strömmen per fas som attribut |
+| `sensor.batteriplanerare_laddgrans_sakringsskydd` | Laddgränsen skyddet skulle sätta (%), med statistik per dag |
+| `binary_sensor.batteriplanerare_sakringsskyddet_begransar_laddningen` | `on` när gränsen är lägre än den planerade laddningen |
+
+Insiktskortet visar strömmen per fas och dagens sänkningar.
 
 ## Varmvatten och elbil (valfritt)
 
