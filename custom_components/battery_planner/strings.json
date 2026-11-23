@@ -39,9 +39,14 @@
           "battery_price": "Battery price after deduction (optional)",
           "spare_heat_kw": "Power that may run on spare battery energy, e.g. heaters (0 = off)",
           "spare_buffer_pct": "Consumption buffer for spare battery energy (%)",
-          "lifetime_mwh": "Warranted throughput in total (optional)"
+          "lifetime_mwh": "Warranted throughput in total (optional)",
+          "phase_current_entities": "Current sensors per phase (all three, optional)",
+          "phase_margin_a": "Margin below the fuse per phase"
         }
       }
+    },
+    "error": {
+      "three_phases": "Select all three phases or none."
     }
   },
   "options": {
@@ -83,9 +88,14 @@
           "battery_price": "Battery price after deduction (optional)",
           "spare_heat_kw": "Power that may run on spare battery energy, e.g. heaters (0 = off)",
           "spare_buffer_pct": "Consumption buffer for spare battery energy (%)",
-          "lifetime_mwh": "Warranted throughput in total (optional)"
+          "lifetime_mwh": "Warranted throughput in total (optional)",
+          "phase_current_entities": "Current sensors per phase (all three, optional)",
+          "phase_margin_a": "Margin below the fuse per phase"
         }
       }
+    },
+    "error": {
+      "three_phases": "Select all three phases or none."
     }
   }
 }

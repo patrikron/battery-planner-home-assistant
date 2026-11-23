@@ -39,9 +39,14 @@
           "battery_price": "Batteriets pris efter avdrag (valfritt)",
           "spare_heat_kw": "Effekt som får köras på batteriöverskott, t.ex. element (0 = av)",
           "spare_buffer_pct": "Buffert för förbrukningen vid batteriöverskott (%)",
-          "lifetime_mwh": "Garanterad genomströmning totalt (valfritt)"
+          "lifetime_mwh": "Garanterad genomströmning totalt (valfritt)",
+          "phase_current_entities": "Strömsensorer per fas (alla tre, valfritt)",
+          "phase_margin_a": "Marginal under säkringen per fas"
         }
       }
+    },
+    "error": {
+      "three_phases": "Välj alla tre faserna eller ingen."
     }
   },
   "options": {
@@ -83,9 +88,14 @@
           "battery_price": "Batteriets pris efter avdrag (valfritt)",
           "spare_heat_kw": "Effekt som får köras på batteriöverskott, t.ex. element (0 = av)",
           "spare_buffer_pct": "Buffert för förbrukningen vid batteriöverskott (%)",
-          "lifetime_mwh": "Garanterad genomströmning totalt (valfritt)"
+          "lifetime_mwh": "Garanterad genomströmning totalt (valfritt)",
+          "phase_current_entities": "Strömsensorer per fas (alla tre, valfritt)",
+          "phase_margin_a": "Marginal under säkringen per fas"
         }
       }
+    },
+    "error": {
+      "three_phases": "Välj alla tre faserna eller ingen."
     }
   }
 }

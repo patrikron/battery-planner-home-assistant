@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfEnergy
+from homeassistant.const import PERCENTAGE, UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -26,6 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         SavingSensor(c, "saving_month", "Besparing denna månad"),
         SavingSensor(c, "saving_total", "Besparing totalt", total=True),
         ForecastErrorSensor(c), CarPlanSensor(c), SolarForecastSensor(c), CyclesSensor(c), SpareSensor(c),
+        FuseRoomSensor(c), ChargeLimitSensor(c),
     ])
 
 
@@ -73,6 +74,7 @@ class PlanSensor(_Base):
             "scenarier": self.data.get("scenarios", {}),
             "dagar": self.data.get("days", {}),
             "halsa": self.data.get("health", {}),
+            "sakring": self.data.get("guard", {}),
             "historik": self.data.get("history", []),
         }
 
@@ -203,3 +205,52 @@ class SpareSensor(_Base):
     @property
     def extra_state_attributes(self):
         return self.data.get("spare") or {}
+
+
+class FuseRoomSensor(_Base):
+    """Charge power that fits under the fuse right now, given the most loaded phase."""
+
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:fuse"
+
+    def __init__(self, c):
+        super().__init__(c, "fuse_room", "Säkringsutrymme för laddning")
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.guard is not None
+
+    @property
+    def native_value(self):
+        return (self.data.get("guard") or {}).get("utrymme_kw")
+
+    @property
+    def extra_state_attributes(self):
+        g = self.data.get("guard") or {}
+        return {k: g.get(k) for k in ("faser_a", "tyngsta_fas", "mal_a", "obalans")}
+
+
+class ChargeLimitSensor(_Base):
+    """The charge limit the fuse protection would set (shadow mode: computed, never written)."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:battery-charging-medium"
+
+    def __init__(self, c):
+        super().__init__(c, "charge_limit", "Laddgräns säkringsskydd")
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.guard is not None
+
+    @property
+    def native_value(self):
+        return (self.data.get("guard") or {}).get("laddgrans_pct")
+
+    @property
+    def extra_state_attributes(self):
+        g = self.data.get("guard") or {}
+        return {k: g.get(k) for k in ("laddgrans_kw", "planerad_laddning_kw", "begransar", "idag", "dagar", "andringar", "lage")}

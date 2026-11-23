@@ -18,6 +18,7 @@ from .const import (
     CONF_SELL_ENTITY, CONF_WEAR_COST, DEFAULTS, DOMAIN, NAME, CONF_PV_ENTITY, CONF_USE_SOLAR_FORECAST,
     CONF_MAX_SOC, CONF_BATTERY_PRICE, CONF_LIFETIME_MWH, CONF_SELL_MARGIN, CONF_SELL_BUFFER,
     CONF_SPARE_HEAT_KW, CONF_SPARE_BUFFER,
+    CONF_PHASE_ENTITIES, CONF_PHASE_MARGIN,
 )
 
 
@@ -43,6 +44,9 @@ def _schema(d: dict[str, Any]) -> vol.Schema:
         vol.Required(CONF_MAX_DISCHARGE, default=g(CONF_MAX_DISCHARGE)): _num(0.5, 30, 0.1, "kW"),
         vol.Required(CONF_EFFICIENCY, default=g(CONF_EFFICIENCY)): _num(70, 100, 1, "%"),
         vol.Required(CONF_FUSE_A, default=g(CONF_FUSE_A)): _num(10, 63, 1, "A"),
+        vol.Optional(CONF_PHASE_ENTITIES, default=d.get(CONF_PHASE_ENTITIES, [])): selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor", multiple=True)),
+        vol.Required(CONF_PHASE_MARGIN, default=g(CONF_PHASE_MARGIN)): _num(0, 5, 0.5, "A"),
         vol.Required(CONF_WEAR_COST, default=g(CONF_WEAR_COST)): _num(0, 1, 0.01, "kr/kWh"),
         vol.Required(CONF_BATTERY_PRICE, default=g(CONF_BATTERY_PRICE)): _num(0, 500000, 100, "kr"),
         vol.Required(CONF_LIFETIME_MWH, default=g(CONF_LIFETIME_MWH)): _num(0, 1000, 0.1, "MWh"),
@@ -73,13 +77,21 @@ def _schema(d: dict[str, Any]) -> vol.Schema:
     return vol.Schema(fields)
 
 
+def _validate(data: dict[str, Any]) -> dict[str, str]:
+    """Phase current sensors are optional, but then all three are needed."""
+    if len(data.get(CONF_PHASE_ENTITIES) or []) not in (0, 3):
+        return {CONF_PHASE_ENTITIES: "three_phases"}
+    return {}
+
+
 class BatteryPlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        if user_input is not None:
+        errors = _validate(user_input) if user_input is not None else {}
+        if user_input is not None and not errors:
             return self.async_create_entry(title=NAME, data=user_input)
-        return self.async_show_form(step_id="user", data_schema=_schema({}))
+        return self.async_show_form(step_id="user", data_schema=_schema(user_input or {}), errors=errors)
 
     @staticmethod
     @callback
@@ -89,7 +101,8 @@ class BatteryPlannerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class OptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
-        if user_input is not None:
+        errors = _validate(user_input) if user_input is not None else {}
+        if user_input is not None and not errors:
             return self.async_create_entry(title="", data=user_input)
-        current = {**self.config_entry.data, **self.config_entry.options}
-        return self.async_show_form(step_id="init", data_schema=_schema(current))
+        current = user_input or {**self.config_entry.data, **self.config_entry.options}
+        return self.async_show_form(step_id="init", data_schema=_schema(current), errors=errors)

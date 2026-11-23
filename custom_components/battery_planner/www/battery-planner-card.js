@@ -7,7 +7,7 @@
  * type: custom:battery-planner-insights-card   scenarier, besparing per dag, prognos mot utfall
  * entity: sensor.batteriplanerare_plan   (valfri, standard)
  */
-const CARD_VERSION = "0.7.0";
+const CARD_VERSION = "0.7.1";
 
 const C = {
   bg: "var(--ha-card-background, var(--card-background-color, #14161b))",
@@ -543,6 +543,7 @@ class BatteryPlannerInsightsCard extends HTMLElement {
     const days = keys.map((k) => ({ day: k, ...all[k] })).filter((d) => d.solar !== undefined);
     const sol = st.attributes.sol || {};
     const hl = st.attributes.halsa || {};
+    const fg = st.attributes.sakring || {};
 
     this.shadowRoot.innerHTML = `
       <style>${this._css()}</style>
@@ -570,6 +571,7 @@ class BatteryPlannerInsightsCard extends HTMLElement {
           ${hl.garanti_forbrukad_pct !== undefined ? `<span>Garanti förbrukad <b>${hl.garanti_forbrukad_pct} %</b></span>` : ""}
           ${hl.garanti_racker_ar !== undefined ? `<span>Garantin räcker <b>${hl.garanti_racker_ar} år</b> i den takten</span>` : ""}
         </div>` : ""}
+        ${this._fuse(fg)}
       </ha-card>`;
     this.shadowRoot.querySelectorAll(".tabs button").forEach((b) =>
       b.addEventListener("click", () => {
@@ -634,6 +636,29 @@ class BatteryPlannerInsightsCard extends HTMLElement {
       ${bars}${this._axis(ok, W, x0, bw, H - 6)}</svg>`;
   }
 
+  _fuse(g) {
+    if (!g || !g.faser_a || !g.faser_a.length) return "";
+    const top = Math.max((g.mal_a || 15) + 3, ...g.faser_a);
+    const bars = g.faser_a
+      .map((a, i) => {
+        const cls = a > g.mal_a ? "hot" : i + 1 === g.tyngsta_fas ? "warm" : "";
+        return `<div class="ph"><span class="k">L${i + 1}</span><div class="track"><div class="bar ${cls}" style="width:${(100 * a) / top}%"></div><i class="lim" style="left:${(100 * g.mal_a) / top}%"></i></div><span class="v">${a.toFixed(1)} A</span></div>`;
+      })
+      .join("");
+    const d = g.idag || {};
+    const hist = Object.values(g.dagar || {});
+    const sum = (k) => hist.reduce((s, x) => s + (x[k] || 0), 0);
+    const lage = g.lage === "skugga" ? " (skuggläge, inget skrivs)" : "";
+    return `<div class="sub">Säkringsskydd${lage} · streck = ${g.mal_a} A</div>
+      <div class="scen">${bars}</div>
+      <div class="foot" style="margin-top:8px">
+        <span>Utrymme nu <b>${g.utrymme_kw ?? "–"} kW</b></span>
+        <span>Laddgräns <b>${g.laddgrans_pct} %</b>${g.begransar ? " · begränsar" : ""}</span>
+        <span>Idag <b>${d.sankningar || 0} sänkningar</b>, ${Math.round(d.begransad_min || 0)} min, ${(d.forlorad_kwh || 0).toFixed(1)} kWh</span>
+        ${hist.length > 1 ? `<span>${hist.length} dagar <b>${sum("sankningar")} sänkningar</b>, ${sum("forlorad_kwh").toFixed(1)} kWh</span>` : ""}
+      </div>`;
+  }
+
   _css() {
     return `
       :host { display:block; }
@@ -649,6 +674,11 @@ class BatteryPlannerInsightsCard extends HTMLElement {
       .row .v { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
       .track { height:14px; border-radius:7px; background:rgba(127,127,127,0.1); overflow:hidden; }
       .bar { height:100%; border-radius:7px; }
+      .ph { display:grid; grid-template-columns:28px 1fr 56px; gap:10px; align-items:center; font-size:0.85em; }
+      .ph .k { color:${C.muted}; } .ph .v { text-align:right; font-variant-numeric:tabular-nums; }
+      .ph .track { position:relative; height:10px; overflow:visible; }
+      .ph .bar { background:${C.muted}; } .ph .bar.warm { background:${C.amber}; } .ph .bar.hot { background:#e5484d; }
+      .ph .lim { position:absolute; top:-3px; bottom:-3px; width:2px; background:${C.text}; opacity:.6; }
       .bar.grid { background:${C.muted}; } .bar.sun { background:${C.amber}; } .bar.bat { background:${C.cyan}; }
       .note { margin-top:10px; font-size:0.85em; color:${C.muted}; }
       .note b { color:${C.text}; }

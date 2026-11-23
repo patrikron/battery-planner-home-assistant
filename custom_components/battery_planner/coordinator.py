@@ -10,7 +10,7 @@ from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_time_change
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -25,6 +25,7 @@ from .const import (
     CONF_CAR_SOC_ENTITY, CONF_CAR_TARGET_ENTITY, CONF_VVB_ENERGY_ENTITY, CONF_VVB_PLAN_ENTITY,
     CONF_PV_ENTITY, CONF_USE_SOLAR_FORECAST, CONF_MAX_SOC, CONF_BATTERY_PRICE, CONF_LIFETIME_MWH,
     HIGH_SOC, HOLD_COST, CONF_SPARE_HEAT_KW, CONF_SPARE_BUFFER, SPARE_OFF_HOURS,
+    CONF_PHASE_ENTITIES, CONF_PHASE_MARGIN, GUARD_HOLD_S, GUARD_RECOVER_S, GUARD_STEP_PCT,
 )
 from .loads import car_need_kwh, next_ready_by, schedule_car, spans, vvb_schedule
 from .forecast import (
@@ -32,6 +33,7 @@ from .forecast import (
     hours_since_fire, learn_fire_factors, typical_fire_hours, update_correction,
 )
 from .optimizer import BatteryParams, HourPlan, apply_hour, optimize, spare_energy
+from .phase_guard import PhaseGuard, imbalance_factors, kw_to_phase_a, phase_a_to_kw, room_kwh
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,6 +83,13 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.state: dict[str, Any] = {}
         self._unsub = async_track_time_change(hass, self._on_new_hour, minute=1, second=30)
         self._spare_on = False
+        self._unsub_phase = None
+        self._imbalance: dict[int, float] = {}
+        self._guard_pushed: datetime | None = None
+        self.guard: PhaseGuard | None = None
+        if len(self._phase_ids) == 3:
+            self.guard = PhaseGuard(float(self._opt(CONF_FUSE_A)), self._phase_margin, float(self._opt(CONF_MAX_CHARGE)),
+                                    GUARD_STEP_PCT, GUARD_HOLD_S, GUARD_RECOVER_S)
 
     # ---------- config ----------
     def _opt(self, key: str):
@@ -110,6 +119,25 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def fuse_kwh(self) -> float:
         return float(self._opt(CONF_FUSE_A)) * 230 * 3 / 1000
 
+    @property
+    def _phase_ids(self) -> list[str]:
+        return list(self._opt(CONF_PHASE_ENTITIES) or [])
+
+    @property
+    def _phase_margin(self) -> float:
+        return float(self._opt(CONF_PHASE_MARGIN))
+
+    def grid_room(self, t: datetime, load: float) -> float:
+        """Grid energy the battery may draw in hour ``t``.
+
+        Without phase sensors the fuse is treated as one total. With them, the inverter is
+        assumed to charge equally on all phases, so the worst phase decides: its share is the
+        learned imbalance factor for that hour times the average phase.
+        """
+        if not self._imbalance and len(self._phase_ids) != 3:
+            return max(0.0, self.fuse_kwh - load)
+        return room_kwh(load, self.fuse_kwh, self._imbalance.get(t.hour, 1.0), phase_a_to_kw(self._phase_margin))
+
     # ---------- persistence ----------
     async def async_load(self) -> None:
         self.state = await self._store.async_load() or {}
@@ -132,6 +160,65 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._unsub:
             self._unsub()
             self._unsub = None
+        if self._unsub_phase:
+            self._unsub_phase()
+            self._unsub_phase = None
+
+    # ---------- fuse protection ----------
+    @callback
+    def async_start_phase_guard(self) -> None:
+        """Follow the phase currents. Shadow mode only computes the limit, it writes nothing."""
+        if self.guard is None or self._unsub_phase:
+            return
+        self._unsub_phase = async_track_state_change_event(self.hass, self._phase_ids, self._on_phase_change)
+
+    def _phase_currents(self) -> list[float] | None:
+        vals = []
+        for eid in self._phase_ids:
+            st = self.hass.states.get(eid)
+            try:
+                vals.append(abs(float(st.state)))
+            except (AttributeError, TypeError, ValueError):
+                return None
+        return vals if len(vals) == 3 else None
+
+    def _planned_grid_kw(self, now: datetime) -> float:
+        """Grid charging the plan wants this hour, as average power."""
+        for row in self.state.get("plan") or []:
+            start = _parse_time(row.get("start"))
+            if start is not None and start <= now < start + timedelta(hours=1):
+                return float(row.get("grid_charge", 0.0))
+        return 0.0
+
+    @callback
+    def _on_phase_change(self, _event) -> None:
+        currents = self._phase_currents()
+        if currents is None or self.guard is None:
+            return
+        now = dt_util.now()
+        changed = self.guard.update(now, currents, self._planned_grid_kw(now))
+        info = self.guard.info()
+        days = self.state.setdefault("guard_days", {})
+        days[now.date().isoformat()] = info["idag"]
+        if len(days) > 31:
+            for k in sorted(days)[:-31]:
+                days.pop(k)
+        if self.data is not None:
+            self.data["guard"] = self._guard_summary()
+        # Refresh the entities when the limit changes, otherwise at most every 30 s
+        if changed or self._guard_pushed is None or (now - self._guard_pushed).total_seconds() >= 30:
+            self._guard_pushed = now
+            self.async_update_listeners()
+
+    def _guard_summary(self) -> dict[str, Any]:
+        if self.guard is None:
+            return {}
+        info = self.guard.info()
+        days = self.state.get("guard_days", {})
+        info["dagar"] = {k: days[k] for k in sorted(days)[-14:]}
+        info["obalans"] = {str(h): f for h, f in sorted(self._imbalance.items())}
+        info["lage"] = "skugga"
+        return info
 
     async def _on_new_hour(self, _now) -> None:
         await self.async_request_refresh()
@@ -144,7 +231,8 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         outdoor, fire = self._opt(CONF_OUTDOOR_ENTITY), self._opt(CONF_FIRE_ENTITY)
         vvb_e, car_e = self._opt(CONF_VVB_ENERGY_ENTITY), self._opt(CONF_CAR_ENERGY_ENTITY)
         pv_e = self._opt(CONF_PV_ENTITY)
-        ids = {imp, exp, *heating} | {e for e in (outdoor, fire, vvb_e, car_e, pv_e) if e}
+        phases = self._phase_ids if len(self._phase_ids) == 3 else []
+        ids = {imp, exp, *heating, *phases} | {e for e in (outdoor, fire, vvb_e, car_e, pv_e) if e}
         start = dt_util.utcnow() - timedelta(days=HISTORY_DAYS)
         stats = await get_instance(self.hass).async_add_executor_job(
             statistics_during_period, self.hass, start, None, ids, "hour", None, {"change", "mean"}
@@ -167,6 +255,8 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ro, rf = rows(outdoor, "mean"), rows(fire, "mean")
         rv, rc = rows(vvb_e, "change"), rows(car_e, "change")
         rp = rows(pv_e, "change")
+        if phases:
+            self._imbalance = imbalance_factors([{t: abs(v) for t, v in rows(p, "mean").items()} for p in phases])
         out = {}
         for t, v in ri.items():
             h = sum(x.get(t, 0.0) for x in heat) if heat else 0.0
@@ -385,7 +475,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             net = [l - v for l, v in zip(load, pv_fc)]
             load = [max(0.0, n) for n in net]
             surplus = [max(0.0, -n) for n in net]
-        room = [max(0.0, self.fuse_kwh - l) for l in load]
+        room = [self.grid_room(t, l) for t, l in zip(horizon, load)]
         self._solar_info = {
             "kalla": "solprognos" if gross else "export senaste veckan",
             "korrigering": round(ratio_pv, 2) if gross else None,
@@ -471,7 +561,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.state["pv_pairs"] = (self.state["pv_pairs"] + [[t.isoformat(), row["pv_raw"], hist[t]["pv"]]])[-24 * 10:]
             soc_before = soc
             soc, cost_with, cost_without = apply_hour(
-                hp, soc, prices[t], sells.get(t, 0.0), load, surplus, max(0.0, self.fuse_kwh - load), bp
+                hp, soc, prices[t], sells.get(t, 0.0), load, surplus, self.grid_room(t, load), bp
             )
             delivered = max(0.0, soc_before - soc) * bp.eff_discharge
             # What the battery actually did this hour, split the same way as apply_hour()
@@ -562,6 +652,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "days": {k: days[k] for k in sorted(days)[-31:]},
             "solar": getattr(self, "_solar_info", {}),
             "health": self._health(days),
+            "guard": self._guard_summary(),
             "plan": self.state["plan"],
             "history": self.state["hours"],
             "current_action": cur["action"] if cur else None,

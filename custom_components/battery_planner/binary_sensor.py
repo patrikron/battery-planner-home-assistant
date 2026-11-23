@@ -13,7 +13,7 @@ from .sensor import _Base
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     c = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([CarChargeNow(c), BatteryGridCharge(c), SpareHeatAllowed(c)])
+    async_add_entities([CarChargeNow(c), BatteryGridCharge(c), SpareHeatAllowed(c), FuseLimiting(c)])
 
 
 class CarChargeNow(_Base, BinarySensorEntity):
@@ -54,3 +54,18 @@ class SpareHeatAllowed(_Base, BinarySensorEntity):
     @property
     def extra_state_attributes(self):
         return self.data.get("spare") or {}
+
+
+class FuseLimiting(_Base, BinarySensorEntity):
+    _attr_icon = "mdi:fuse-alert"
+
+    def __init__(self, c):
+        super().__init__(c, "fuse_limiting", "Säkringsskyddet begränsar laddningen")
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.coordinator.guard is not None
+
+    @property
+    def is_on(self):
+        return bool((self.data.get("guard") or {}).get("begransar"))
