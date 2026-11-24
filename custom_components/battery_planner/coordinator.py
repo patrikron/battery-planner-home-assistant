@@ -32,7 +32,7 @@ from .forecast import (
     DEFAULT_FIRE_FACTORS, build_profile, fit_heating, forecast, heating_forecast, heating_model,
     hours_since_fire, learn_fire_factors, typical_fire_hours, update_correction,
 )
-from .optimizer import BatteryParams, HourPlan, apply_hour, optimize, spare_energy
+from .optimizer import BatteryParams, HourPlan, apply_hour, optimize, spare_energy, stock_step
 from .phase_guard import PhaseGuard, imbalance_factors, kw_to_phase_a, phase_a_to_kw, room_kwh
 
 _LOGGER = logging.getLogger(__name__)
@@ -151,6 +151,38 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.state.setdefault("pv_pairs", [])         # [ [iso, raw forecast, actual], ... ]
         self.state.setdefault("throughput", 0.0)      # kWh delivered from the battery in total
         self.state.setdefault("hours", [])            # booked hours (last HOURS_KEEP) for the card's history tab
+        if "stock" not in self.state:
+            self._migrate_stock()
+
+    def _migrate_stock(self) -> None:
+        """Value the energy in the battery when upgrading from a version that did not.
+
+        Earlier versions booked the whole cost of a charge in the hour it happened. Replay the
+        stored hours so the days they cover are counted the new way, and start following
+        what the energy in the battery cost.
+        """
+        lo = self.params.lo
+        kwh, value = 0.0, 0.0
+        hours = self.state["hours"]
+        if hours:
+            # Energy already there before the first stored hour was paid for in hours that are
+            # no longer stored (and already counted in their day), so it starts at no value.
+            h0, bp = hours[0], self.params
+            before = (float(h0["soc_end"]) - (h0["grid_charge"] + h0["solar_charge"]) * bp.eff_charge
+                      + (h0["to_load"] + h0["to_grid"]) / bp.eff_discharge)
+            kwh = max(0.0, before - lo)
+        for h in hours:
+            cash = float(h["saving"])
+            kwh, value, d_value = stock_step(kwh, value, float(h["soc_end"]) - lo, -cash)
+            h["saving"] = round(cash + d_value, 2)
+            day = _parse_time(h["start"]).date().isoformat()
+            if day in self.state["savings"]:
+                self.state["savings"][day] = round(self.state["savings"][day] + d_value, 3)
+            if "batt" in self.state["days"].get(day, {}):
+                self.state["days"][day]["batt"] = round(self.state["days"][day]["batt"] - d_value, 3)
+        if not hours:
+            kwh = max(0.0, float(self.state["soc"]) - lo)
+        self.state["stock"] = {"kwh": kwh, "value": value}
 
     async def _save(self) -> None:
         await self._store.async_save(self.state)
@@ -564,6 +596,13 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 hp, soc, prices[t], sells.get(t, 0.0), load, surplus, self.grid_room(t, load), bp
             )
             delivered = max(0.0, soc_before - soc) * bp.eff_discharge
+            # Count the energy left in the battery at what it cost, so charging at night
+            # does not make the day look bad and using it later does not look free.
+            stock = self.state["stock"]
+            stock["kwh"], stock["value"], d_value = stock_step(
+                stock["kwh"], stock["value"], soc - bp.lo, cost_with - cost_without
+            )
+            cost_with -= d_value
             # What the battery actually did this hour, split the same way as apply_hour()
             drawn = max(0.0, soc - soc_before) / bp.eff_charge
             solar_in = min(surplus, drawn)
