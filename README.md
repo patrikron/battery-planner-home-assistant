@@ -107,7 +107,7 @@ Nya entiteter:
 | `sensor.batteriplanerare_laddgrans_sakringsskydd` | Laddgränsen skyddet skulle sätta (%), med statistik per dag |
 | `binary_sensor.batteriplanerare_sakringsskyddet_begransar_laddningen` | `on` när gränsen är lägre än den planerade laddningen |
 
-Insiktskortet visar strömmen per fas och dagens sänkningar.
+Kortet `custom:battery-planner-fuse-card` visar strömmen per fas och dagens sänkningar.
 
 ## Varmvatten och elbil (valfritt)
 
@@ -136,7 +136,7 @@ Kortet följer med komponenten och laddas automatiskt – ingen resurs behöver 
 type: custom:battery-planner-card
 ```
 
-Valfria inställningar: `title`, `hours` (antal timmar i diagrammet, standard 24) och egna entiteter (`entity`, `soc_entity`, `soc_kwh_entity`, `today_entity`, `month_entity`, `error_entity`).
+Valfria inställningar: `title`, `hours` (antal timmar i diagrammet, standard 24), `collapsed` (standard `true`: allt under raden "Laddar …, används …" fälls ihop bakom "Visa mer"; sätt `false` för att alltid visa allt) och egna entiteter (`entity`, `soc_entity`, `soc_kwh_entity`, `today_entity`, `month_entity`, `error_entity`).
 
 Kortet visar laddnivå, vad batteriet gör nu, besparing idag och denna månad, ett diagram med elpris, planerad laddning (cyan), urladdning (amber) och laddnivå (vit linje), samt nästa planerade händelser.
 
@@ -147,3 +147,17 @@ type: custom:battery-planner-insights-card
 ```
 
 Visar scenariojämförelsen (bara nät, med sol, sol + batteri) för idag, månaden eller totalt, besparing per dag och prognos mot utfall för förbrukning och sol. Kortet fylls på när första dygnet är bokfört.
+
+### Säkringsskydd och slitage
+
+Sedan 0.7.3 är de två delarna egna kort i stället för en del av insiktskortet:
+
+```yaml
+type: custom:battery-planner-fuse-card     # strömmen per fas, laddgräns och sänkningar
+```
+
+```yaml
+type: custom:battery-planner-health-card   # solprognosens källa, laddcykler och garanti
+```
+
+Vill du hellre ha dem kvar i insiktskortet sätter du `show_fuse: true` och `show_health: true` där.
