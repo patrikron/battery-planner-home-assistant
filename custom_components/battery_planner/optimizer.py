@@ -247,3 +247,24 @@ def spare_energy(hours: list[HourPlan], soc0: float, bp: BatteryParams, buffer: 
         return 0.0, 0
     spare = (min(soc0, bp.hi) - bp.lo - needed) * bp.eff_discharge
     return max(0.0, spare), end
+
+
+def stock_step(kwh: float, value: float, new_kwh: float, charge_cost: float) -> tuple[float, float, float]:
+    """Follow what the energy above the reserve cost to put there.
+
+    ``kwh``/``value`` is the stored energy and what it cost (kr). ``charge_cost`` is what
+    charging cost this hour (grid price, or the export income given up for solar). Energy
+    that leaves takes its share of the value at the average cost.
+
+    Returns (new kwh, new value, change in value). Adding the change in value to the hour's
+    cash saving makes a charging hour cost nothing and a discharging hour earn only the
+    margin over what the energy cost, so a day is not judged by when the battery is full.
+    """
+    new_kwh = max(0.0, new_kwh)
+    if new_kwh > kwh + 1e-9:
+        new_value = value + max(0.0, charge_cost)
+    elif kwh > 1e-9:
+        new_value = value * new_kwh / kwh
+    else:
+        new_value = 0.0
+    return new_kwh, new_value, new_value - value
