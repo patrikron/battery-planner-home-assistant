@@ -65,6 +65,7 @@ class PlanSensor(_Base):
         return {
             "plan": self.data.get("plan", []),
             "planerad_besparing": self.data.get("planned_saving"),
+            "beraknad_besparing_idag": self.data.get("saving_today_fc"),
             "korrigering": self.data.get("correction"),
             "lage": "skugga",
             "uppvarmning": self.data.get("heating", {}),
@@ -123,6 +124,8 @@ class SavingSensor(_Base):
     def extra_state_attributes(self):
         if self._key == "saving_total":
             return {"per_dag": self.data.get("saving_daily", {})}
+        if self._key == "saving_today":
+            return {"beraknat_hela_dagen": self.data.get("saving_today_fc")}
         return None
 
 

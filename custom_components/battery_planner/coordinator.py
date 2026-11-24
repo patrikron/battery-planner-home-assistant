@@ -32,7 +32,7 @@ from .forecast import (
     DEFAULT_FIRE_FACTORS, build_profile, fit_heating, forecast, heating_forecast, heating_model,
     hours_since_fire, learn_fire_factors, typical_fire_hours, update_correction,
 )
-from .optimizer import BatteryParams, HourPlan, apply_hour, optimize, spare_energy, stock_step
+from .optimizer import BatteryParams, HourPlan, apply_hour, expected_saving, optimize, spare_energy, stock_step
 from .phase_guard import PhaseGuard, imbalance_factors, kw_to_phase_a, phase_a_to_kw, room_kwh
 
 _LOGGER = logging.getLogger(__name__)
@@ -532,6 +532,13 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 horizon, price, load, base, heat_fc, vvb_fc, car_fc, surplus, result.hours, cons_fc, pv_fc, pv_raw)
         ]
         self._spare_info = self._spare(result.hours, horizon, bp)
+        # The rest of today as the plan expects it, booked the same way as finished hours
+        n = sum(1 for t in horizon if t.date() == now_h.date())
+        stock = self.state["stock"]
+        self._saving_rest_today = expected_saving(
+            result.hours[:n], float(self.state["soc"]), stock["kwh"], stock["value"],
+            price[:n], sell[:n], load[:n], surplus[:n], room[:n], bp,
+        )
         # Snapshot of the day's forecast, taken at the first plan after midnight
         today = now_h.date().isoformat()
         day = self.state["days"].setdefault(today, {})
@@ -702,6 +709,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "saving_total": round(sum(sav.values()), 2),
             "saving_daily": sav,
             "planned_saving": round(result.saving, 2),
+            "saving_today_fc": round(sav.get(today.isoformat(), 0.0) + getattr(self, "_saving_rest_today", 0.0), 2),
             "forecast_error_pct": err_pct,
             "correction": self.state["correction"],
             "heating": getattr(self, "_heat_info", {}),
