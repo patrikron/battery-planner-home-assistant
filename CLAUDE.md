@@ -4,7 +4,7 @@ Läs hela filen innan du ändrar något. Repot är publikt: skriv bara teknisk i
 
 ## Komponenten
 
-En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.7.2**.
+En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i koden: **0.7.3**.
 
 - **Skuggläge:** planerar och simulerar ett virtuellt batteri, men styr ingenting. Skuggläget får aldrig ändra något i Home Assistant.
 - Styrning ska vara ett eget läge, avstängt som standard.
@@ -21,7 +21,7 @@ En egen custom integration, `battery_planner` ("Batteriplanerare"). Version i ko
 | `phase_guard.py` | Säkringsskydd per fas. `headroom_kw()` ger laddeffekt som ryms under säkringen minus marginal, utifrån den tyngsta fasen (med en riktig batteriladdning dras dess egen ström av).<br>`imbalance_factors()` lär tyngsta fas / medelfas per timme ur timstatistik. `room_kwh()` används i planeringen och i bokföringen via `coordinator.grid_room()`.<br>`PhaseGuard` är en tillståndsmaskin: sänker gränsen (10 %-steg) efter 45 s över målet och höjer efter 180 s med utrymme. Den räknar sänkningar, begränsade minuter och förlorade kWh per dag. |
 | `binary_sensor.py` | "Elbil ska ladda nu", "Batteri laddar från nätet nu", "Element får köra på batteriet" (på vid överskott ≥ effekt × 1 h, av under 0,5 h) och "Säkringsskyddet begränsar laddningen". |
 | `config_flow.py` | Ett enda formulär med alla fält, plus ett options flow med samma formulär. |
-| `www/battery-planner-card.js` | Två kort, som serveras automatiskt via `add_extra_js_url`:<br>`custom:battery-planner-card` visar plan, laddnivå och besparing.<br>`custom:battery-planner-insights-card` visar scenarier, besparing per dag och prognos mot utfall. |
+| `www/battery-planner-card.js` | Fyra kort, som serveras automatiskt via `add_extra_js_url`:<br>`custom:battery-planner-card` visar plan, laddnivå och besparing. Allt under raden "Laddar …, används …" fälls ihop bakom "Visa mer" (`collapsed: false` stänger av).<br>`custom:battery-planner-insights-card` visar scenarier, besparing per dag och prognos mot utfall (`show_fuse`/`show_health` tar tillbaka de utflyttade delarna).<br>`custom:battery-planner-fuse-card` (säkringsskydd) och `custom:battery-planner-health-card` (solkälla och slitage) ärver insiktskortet och visar bara sin del. |
 
 ### Viktiga beslut och lärdomar
 

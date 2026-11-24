@@ -4,10 +4,13 @@
  *   show_charging: true   (lista med planerade laddtillfällen)
  *   charging_rows: 6
  *   Flikar "Närmaste dygnet", "Imorgon" och "Historik" (vad batteriet gjorde, dag för dag, ca 8 dygn bakåt).
+ *   collapsed: true       (allt under raden "Laddar …, används …" fälls ihop bakom "Visa mer")
  * type: custom:battery-planner-insights-card   scenarier, besparing per dag, prognos mot utfall
+ * type: custom:battery-planner-fuse-card       säkringsskydd per fas
+ * type: custom:battery-planner-health-card     solprognosens källa och batteriets slitage
  * entity: sensor.batteriplanerare_plan   (valfri, standard)
  */
-const CARD_VERSION = "0.7.2";
+const CARD_VERSION = "0.7.3";
 
 const C = {
   bg: "var(--ha-card-background, var(--card-background-color, #14161b))",
@@ -156,6 +159,7 @@ class BatteryPlannerCard extends HTMLElement {
       hours: 24,
       show_charging: true,
       charging_rows: 6,
+      collapsed: true,
       ...config,
     };
     if (!this.shadowRoot) {
@@ -164,6 +168,12 @@ class BatteryPlannerCard extends HTMLElement {
         const nav = e.target.closest && e.target.closest("[data-day]");
         if (nav) {
           this._histDay = nav.dataset.day;
+          this._render();
+          return;
+        }
+        const more = e.target.closest && e.target.closest("[data-more]");
+        if (more) {
+          this._open = !this._open;
           this._render();
           return;
         }
@@ -273,6 +283,7 @@ class BatteryPlannerCard extends HTMLElement {
         ${view === "history" ? "" : view === "tomorrow"
           ? this._daySchedule(tom)
           : `<div class="next"><ha-icon icon="mdi:clock-outline"></ha-icon>${nextEventText(plan)}</div>`}
+        ${this._more(view, `
         ${c.show_charging && view !== "history" ? this._charging(st.attributes.plan || []) : ""}
         ${(car.perioder && car.perioder.length) || (vvb.perioder && vvb.perioder.length) || car.inkopplad === false ? `<div class="loads">
           ${vvb.perioder ? `<div><ha-icon icon="mdi:water-boiler"></ha-icon><span>Varmvatten</span><b>${vvb.perioder.length ? `${spanTxt(vvb.perioder)} · ${vvb.planerat_kwh} kWh` : "inget planerat"}</b></div>` : ""}
@@ -283,7 +294,18 @@ class BatteryPlannerCard extends HTMLElement {
           <span>Planerad besparing framåt: <b>${fmtKr(planned)}</b></span>
           <span>Prognosfel: <b>${err !== null ? err.toLocaleString("sv-SE") + " %" : "–"}</b></span>
         </div>
+        `)}
       </ha-card>`;
+  }
+
+  /** Everything below the summary line, folded away behind "Visa mer" unless collapsed: false. */
+  _more(view, html) {
+    if (!this._config.collapsed) return html;
+    const open = !!this._open;
+    return `<button class="more" data-more aria-expanded="${open}">
+        <span>${open ? "Visa mindre" : "Visa mer"}</span><ha-icon icon="mdi:chevron-${open ? "up" : "down"}"></ha-icon>
+      </button>
+      ${open ? `<div class="morebody">${html}</div>` : ""}`;
   }
 
   _charging(plan) {
@@ -462,6 +484,9 @@ class BatteryPlannerCard extends HTMLElement {
       .dot.ch { background:${C.cyan}; } .dot.sun { background:#ffd54a; } .dot.dis { background:${C.amber}; } .dot.sell { background:${C.sell}; }
       .next { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:10px; background:rgba(127,127,127,0.1); font-size:0.95em; }
       .next ha-icon { --mdc-icon-size:18px; color:${C.cyan}; }
+      .more { display:flex; align-items:center; justify-content:center; gap:4px; width:100%; margin-top:8px; padding:6px; font:inherit; font-size:0.85em; color:${C.muted}; background:transparent; border:0; border-radius:8px; cursor:pointer; }
+      .more:hover { background:rgba(127,127,127,0.1); color:${C.text}; }
+      .more ha-icon { --mdc-icon-size:18px; }
       .charging { margin-top:10px; }
       .charging .sub { font-size:0.8em; color:${C.muted}; margin-bottom:4px; }
       .charging .none { font-size:0.9em; color:${C.muted}; }
@@ -507,7 +532,7 @@ const PERIODS = { idag: "Idag", manad: "Månaden", totalt: "Totalt" };
 
 class BatteryPlannerInsightsCard extends HTMLElement {
   setConfig(config) {
-    this._config = { entity: "sensor.batteriplanerare_plan", title: "Batteriets nytta", days: 14, ...config };
+    this._config = { entity: "sensor.batteriplanerare_plan", title: "Batteriets nytta", days: 14, show_health: false, show_fuse: false, ...config };
     this._period = this._config.period || "manad";
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
   }
@@ -559,19 +584,8 @@ class BatteryPlannerInsightsCard extends HTMLElement {
         ${this._pairChart(days, "load_fc", "load_act", "kWh")}
         ${days.some((d) => d.pv_act !== undefined) ? `<div class="sub">Sol: prognos mot utfall (kWh)</div>${this._pairChart(days, "pv_fc", "pv_act", "kWh")}` : ""}
         <div class="legend"><span><i class="o"></i>Prognos vid midnatt</span><span><i class="f"></i>Utfall</span></div>
-        <div class="foot">
-          <span>Solkälla <b>${sol.kalla || "–"}</b></span>
-          ${sol.prognos_24h !== null && sol.prognos_24h !== undefined ? `<span>Sol kommande dygn <b>${sol.prognos_24h} kWh</b></span>` : ""}
-          ${sol.korrigering ? `<span>Prognosen justeras <b>× ${sol.korrigering}</b></span>` : ""}
-        </div>
-        ${hl.cykler !== undefined ? `<div class="sub">Batteriets slitage</div><div class="foot" style="margin-top:2px">
-          <span>Laddcykler <b>${hl.cykler}</b></span>
-          ${hl.cykler_per_ar !== null && hl.cykler_per_ar !== undefined ? `<span>Takt <b>${hl.cykler_per_ar} per år</b></span>` : ""}
-          <span>Slitagekostnad <b>${hl.slitagekostnad} kr/kWh</b></span>
-          ${hl.garanti_forbrukad_pct !== undefined ? `<span>Garanti förbrukad <b>${hl.garanti_forbrukad_pct} %</b></span>` : ""}
-          ${hl.garanti_racker_ar !== undefined ? `<span>Garantin räcker <b>${hl.garanti_racker_ar} år</b> i den takten</span>` : ""}
-        </div>` : ""}
-        ${this._fuse(fg)}
+        ${c.show_health ? this._health(sol, hl) : ""}
+        ${c.show_fuse ? this._fuse(fg) : ""}
       </ha-card>`;
     this.shadowRoot.querySelectorAll(".tabs button").forEach((b) =>
       b.addEventListener("click", () => {
@@ -636,6 +650,22 @@ class BatteryPlannerInsightsCard extends HTMLElement {
       ${bars}${this._axis(ok, W, x0, bw, H - 6)}</svg>`;
   }
 
+  /** Where the solar forecast comes from, and how much of the battery's life has been used. */
+  _health(sol, hl) {
+    return `<div class="sub">Solprognos</div><div class="foot" style="margin-top:2px">
+          <span>Solkälla <b>${sol.kalla || "–"}</b></span>
+          ${sol.prognos_24h !== null && sol.prognos_24h !== undefined ? `<span>Sol kommande dygn <b>${sol.prognos_24h} kWh</b></span>` : ""}
+          ${sol.korrigering ? `<span>Prognosen justeras <b>× ${sol.korrigering}</b></span>` : ""}
+        </div>
+        ${hl.cykler !== undefined ? `<div class="sub">Batteriets slitage</div><div class="foot" style="margin-top:2px">
+          <span>Laddcykler <b>${hl.cykler}</b></span>
+          ${hl.cykler_per_ar !== null && hl.cykler_per_ar !== undefined ? `<span>Takt <b>${hl.cykler_per_ar} per år</b></span>` : ""}
+          <span>Slitagekostnad <b>${hl.slitagekostnad} kr/kWh</b></span>
+          ${hl.garanti_forbrukad_pct !== undefined ? `<span>Garanti förbrukad <b>${hl.garanti_forbrukad_pct} %</b></span>` : ""}
+          ${hl.garanti_racker_ar !== undefined ? `<span>Garantin räcker <b>${hl.garanti_racker_ar} år</b> i den takten</span>` : ""}
+        </div>` : ""}`;
+  }
+
   _fuse(g) {
     if (!g || !g.faser_a || !g.faser_a.length) return "";
     const top = Math.max((g.mal_a || 15) + 3, ...g.faser_a);
@@ -649,7 +679,7 @@ class BatteryPlannerInsightsCard extends HTMLElement {
     const hist = Object.values(g.dagar || {});
     const sum = (k) => hist.reduce((s, x) => s + (x[k] || 0), 0);
     const lage = g.lage === "skugga" ? " (skuggläge, inget skrivs)" : "";
-    return `<div class="sub">Säkringsskydd${lage} · streck = ${g.mal_a} A</div>
+    return `<div class="sub">Ström per fas${lage} · streck = ${g.mal_a} A</div>
       <div class="scen">${bars}</div>
       <div class="foot" style="margin-top:8px">
         <span>Utrymme nu <b>${g.utrymme_kw ?? "–"} kW</b></span>
@@ -704,4 +734,61 @@ if (!customElements.get("battery-planner-insights-card")) {
     description: "Scenarier, besparing per dag och prognos mot utfall",
     preview: true,
   });
+}
+
+
+/* ---------- Säkringsskydd och slitage som egna kort ---------- */
+/** Shares look and helpers with the insights card, but shows only one section. */
+class BatteryPlannerSectionCard extends BatteryPlannerInsightsCard {
+  setConfig(config) {
+    this._config = { entity: "sensor.batteriplanerare_plan", title: this.constructor.TITLE, ...config };
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+  }
+
+  getCardSize() {
+    return 3;
+  }
+
+  _render() {
+    const c = this._config;
+    const st = this._hass && this._hass.states[c.entity];
+    if (!st) {
+      this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px">Hittar inte ${c.entity}</div></ha-card>`;
+      return;
+    }
+    const body = this._body(st.attributes) || `<div class="empty">${this.constructor.EMPTY}</div>`;
+    this.shadowRoot.innerHTML = `
+      <style>${this._css()} .first > .sub:first-child, .first > .foot:first-child { margin-top:0; }</style>
+      <ha-card>
+        <div class="head"><div class="title">${c.title}</div></div>
+        <div class="first">${body}</div>
+      </ha-card>`;
+  }
+}
+
+class BatteryPlannerFuseCard extends BatteryPlannerSectionCard {
+  static TITLE = "Säkringsskydd";
+  static EMPTY = "Ingen fasström än. Ange sensorer för strömmen per fas under Batteriplanerare → Konfigurera.";
+  _body(a) {
+    return this._fuse(a.sakring || {});
+  }
+}
+
+class BatteryPlannerHealthCard extends BatteryPlannerSectionCard {
+  static TITLE = "Slitage och solprognos";
+  static EMPTY = "Inget att visa än.";
+  _body(a) {
+    return this._health(a.sol || {}, a.halsa || {});
+  }
+}
+
+for (const [type, cls, name, description] of [
+  ["battery-planner-fuse-card", BatteryPlannerFuseCard, "Batteriplanerare – säkringsskydd", "Strömmen per fas och hur ofta laddningen begränsas"],
+  ["battery-planner-health-card", BatteryPlannerHealthCard, "Batteriplanerare – slitage", "Solprognosens källa, laddcykler och garanti"],
+]) {
+  if (!customElements.get(type)) {
+    customElements.define(type, cls);
+    window.customCards = window.customCards || [];
+    window.customCards.push({ type, name, description, preview: true });
+  }
 }
