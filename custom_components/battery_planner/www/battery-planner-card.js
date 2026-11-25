@@ -10,7 +10,7 @@
  * type: custom:battery-planner-health-card     solprognosens källa och batteriets slitage
  * entity: sensor.batteriplanerare_plan   (valfri, standard)
  */
-const CARD_VERSION = "0.7.3";
+const CARD_VERSION = "0.7.4";
 
 const C = {
   bg: "var(--ha-card-background, var(--card-background-color, #14161b))",
@@ -246,6 +246,7 @@ class BatteryPlannerCard extends HTMLElement {
     const month = this._num(c.month_entity);
     const err = this._num(c.error_entity);
     const planned = st.attributes.planerad_besparing;
+    const todayFc = st.attributes.beraknad_besparing_idag;
     const shadow = st.attributes.lage === "skugga";
     const heat = st.attributes.uppvarmning || {};
     const car = st.attributes.elbil || {};
@@ -262,7 +263,7 @@ class BatteryPlannerCard extends HTMLElement {
         <div class="stats">
           ${this._ring(soc)}
           <div class="kv"><div class="k">I batteriet</div><div class="v">${socKwh !== null ? socKwh.toLocaleString("sv-SE", { maximumFractionDigits: 1 }) + " kWh" : "–"}</div></div>
-          <div class="kv"><div class="k">Sparat idag</div><div class="v accent">${fmtKr(today)}</div></div>
+          <div class="kv"><div class="k">Sparat idag</div><div class="v accent">${fmtKr(today)}</div>${todayFc !== undefined && todayFc !== null ? `<div class="fc" title="Sparat hittills plus det planen räknar med under resten av dagen">beräknat ${fmtKr(todayFc)}</div>` : ""}</div>
           <div class="kv"><div class="k">Denna månad</div><div class="v">${fmtKr(month)}</div></div>
         </div>
         <div class="tabs" role="tablist">
@@ -463,6 +464,7 @@ class BatteryPlannerCard extends HTMLElement {
       .kv .k { font-size:0.75em; color:${C.muted}; }
       .kv .v { font-size:1.15em; font-weight:600; }
       .kv .v.accent { color:${C.amber}; }
+      .kv .fc { font-size:0.75em; color:${C.muted}; font-variant-numeric:tabular-nums; }
       .chart { width:100%; height:auto; display:block; margin-top:4px; }
       .chart .ax { font-size:11px; fill:${C.muted}; }
       .legend { display:flex; flex-wrap:wrap; gap:14px; font-size:0.75em; color:${C.muted}; margin:4px 0 10px; }

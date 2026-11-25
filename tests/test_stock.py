@@ -58,3 +58,18 @@ async def test_upgrade_rebooks_stored_hours(hass):
     assert abs(sav[day1.date().isoformat()] - 2.0) < 1e-6                   # 6 kr saved minus 4 kr it cost
     assert abs(c.state["stock"]["value"] - 4.0) < 1e-6                      # the rest is still in the battery
     assert c.state["hours"][0]["saving"] == 0.0
+
+
+def test_expected_saving_counts_stored_energy_like_the_booking():
+    from custom_components.battery_planner.optimizer import BatteryParams, HourPlan, expected_saving
+
+    bp = BatteryParams(capacity_kwh=10, min_soc=0.0, eff_charge=1.0, eff_discharge=1.0, wear_cost=0.0)
+    # 5 kWh stored for 5 kr (1 kr/kWh). The plan discharges them at 3 kr/kWh, then idles.
+    hours = [HourPlan(0, 5.0, 0.0, to_load=5.0), HourPlan(1, 0.0, 0.0)]
+    got = expected_saving(hours, 5.0, 5.0, 5.0, [3.0, 3.0], [0.0, 0.0], [5.0, 2.0], [0.0, 0.0],
+                          [11.0, 11.0], bp)
+    assert abs(got - 10.0) < 1e-9  # 15 kr avoided minus the 5 kr the energy cost
+    # Charging now costs nothing in the day's figure.
+    hours = [HourPlan(0, 0.0, 4.0, grid_charge=4.0)]
+    got = expected_saving(hours, 0.0, 0.0, 0.0, [1.0], [0.0], [1.0], [0.0], [11.0], bp)
+    assert abs(got) < 1e-9

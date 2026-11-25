@@ -59,3 +59,4 @@ async def test_setup_and_plan(hass):
     state = hass.states.get("sensor.batteriplanerare_plan")
     assert state is not None and state.state in ("Laddar", "Levererar", "Väntar")
     assert hass.states.get("sensor.batteriplanerare_virtuell_laddniva") is not None
+    assert state.attributes["beraknad_besparing_idag"] == coord.data["saving_today_fc"]

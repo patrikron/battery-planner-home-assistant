@@ -268,3 +268,23 @@ def stock_step(kwh: float, value: float, new_kwh: float, charge_cost: float) -> 
     else:
         new_value = 0.0
     return new_kwh, new_value, new_value - value
+
+
+def expected_saving(hours: list[HourPlan], soc0: float, stock_kwh: float, stock_value: float,
+                    price, sell, load, surplus, grid_room, bp: BatteryParams) -> float:
+    """Saving the plan is expected to book over ``hours``, counted like the real booking.
+
+    Each hour is run through ``apply_hour()`` with the forecast load and surplus, and the
+    energy in the battery is valued with ``stock_step()``, so the figure is comparable with
+    the day's booked saving. ``price``/``sell``/``load``/``surplus``/``grid_room`` are lists
+    with one value per hour in ``hours``.
+    """
+    soc, total = soc0, 0.0
+    kwh, value = stock_kwh, stock_value
+    for k, hp in enumerate(hours):
+        soc, cost_with, cost_without = apply_hour(
+            hp, soc, price[k], sell[k], load[k], surplus[k], grid_room[k], bp
+        )
+        kwh, value, d_value = stock_step(kwh, value, soc - bp.lo, cost_with - cost_without)
+        total += cost_without - cost_with + d_value
+    return total
