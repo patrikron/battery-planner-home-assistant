@@ -56,6 +56,7 @@ class HourPlan:
     to_grid: float = 0.0           # kWh sold from battery
     cost: float = 0.0              # cost this hour with battery
     cost_without: float = 0.0      # cost this hour without battery
+    load_first: bool = False       # no import was forecast: the battery covers any shortfall (Load first)
 
     @property
     def action(self) -> str:
@@ -205,7 +206,10 @@ def apply_hour(planned: HourPlan, soc: float, price: float, sell: float, load: f
         grid = min(drawn - solar, max(0.0, planned.grid_charge), grid_room)
         drawn = solar + grid
         soc += drawn * bp.eff_charge
-        return soc, base + grid * price + solar * sell, base
+        cost = base + grid * price + solar * sell
+        if planned.load_first and planned.grid_charge <= 0.05:
+            soc, cost = _cover_shortfall(soc, cost, price, load, bp)
+        return soc, cost, base
     if planned.action == "discharge":
         avail = (soc - lo) * bp.eff_discharge
         want = planned.to_load + planned.to_grid
@@ -221,8 +225,21 @@ def apply_hour(planned: HourPlan, soc: float, price: float, sell: float, load: f
         to_grid = delivered - to_load
         soc -= delivered / bp.eff_discharge
         return soc, base - to_load * price - to_grid * sell + delivered * bp.wear_cost, base
-    # idle: solar surplus that would be exported may still be stored if it pays
+    # idle: in an hour the plan expected the sun to cover, the inverter runs Load first,
+    # so the battery covers whatever the sun does not (clouds, higher load)
+    if planned.load_first:
+        soc, cost = _cover_shortfall(soc, base, price, load, bp)
+        return soc, cost, base
     return soc, base, base
+
+
+def _cover_shortfall(soc: float, cost: float, price: float, load: float, bp: BatteryParams):
+    """Let the battery supply the house's import, as Load first would, down to the reserve."""
+    avail = max(0.0, (soc - bp.lo) * bp.eff_discharge)
+    delivered = max(0.0, min(load, avail, bp.max_discharge_kw))
+    if delivered <= 0:
+        return soc, cost
+    return soc - delivered / bp.eff_discharge, cost - delivered * price + delivered * bp.wear_cost
 
 
 def spare_energy(hours: list[HourPlan], soc0: float, bp: BatteryParams, buffer: float = 0.2):

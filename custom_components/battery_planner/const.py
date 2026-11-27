@@ -2,7 +2,7 @@
 
 DOMAIN = "battery_planner"
 NAME = "Batteriplanerare"
-VERSION = "0.7.4"
+VERSION = "0.7.5"
 
 CONF_PRICE_ENTITY = "price_entity"
 CONF_SELL_ENTITY = "sell_entity"
