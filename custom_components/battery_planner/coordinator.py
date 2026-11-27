@@ -591,6 +591,7 @@ class BatteryPlannerCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if row:
                 hp.grid_charge, hp.solar_charge = row["grid_charge"], row["solar_charge"]
                 hp.to_load, hp.to_grid = row["to_load"], row["to_grid"]
+                hp.load_first = row["load"] <= 0.05
                 update_correction_dict = {int(k): v for k, v in self.state["correction"].items()}
                 update_correction(update_correction_dict, t.hour, row.get("base", row["load"]), actual_base)
                 self.state["correction"] = {str(k): v for k, v in update_correction_dict.items()}

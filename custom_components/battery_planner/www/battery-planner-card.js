@@ -10,7 +10,7 @@
  * type: custom:battery-planner-health-card     solprognosens källa och batteriets slitage
  * entity: sensor.batteriplanerare_plan   (valfri, standard)
  */
-const CARD_VERSION = "0.7.4";
+const CARD_VERSION = "0.7.5";
 
 const C = {
   bg: "var(--ha-card-background, var(--card-background-color, #14161b))",
